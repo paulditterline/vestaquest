@@ -11,7 +11,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @vestaquest/board && npm run build -w @vestaquest/web",
+    "build": "npm run build -w @vestaquest/board && npm run build -w @vestaquest/transport && npm run build -w @vestaquest/web",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
     "dev": "npm run dev -w @vestaquest/web --",
     "format": "prettier --write .",
@@ -21,6 +21,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:watch": "vitest",
+    "transition:spike": "node --env-file-if-exists=.env --import tsx tools/transition-spike/index.ts",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.json"
   },
   "devDependencies": {
@@ -36,6 +37,7 @@
     "eslint-plugin-react-refresh": "0.5.3",
     "globals": "17.7.0",
     "prettier": "3.9.6",
+    "tsx": "4.23.11",
     "typescript": "6.0.3",
     "typescript-eslint": "8.65.0",
     "vite": "8.1.5",
