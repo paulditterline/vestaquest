@@ -5,3 +5,13 @@
 
 # Operating-system metadata
 .DS_Store
+
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Test artifacts
+playwright-report/
+test-results/

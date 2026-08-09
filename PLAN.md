@@ -67,9 +67,9 @@ The detailed canonical requirements live in `AGENTS.md`. The implementation plan
 
 Decision gates prevent an unconfirmed preference from becoming an expensive architectural commitment. A gate may be resolved in a short design conversation, an Architecture Decision Record, or a measured prototype.
 
-### Gate A — implementation stack, before installing dependencies
+### Gate A — implementation stack, resolved 2026-08-09
 
-Recommended default:
+Selected engineering stack:
 
 - Node.js 22 LTS and strict TypeScript throughout.
 - npm workspaces with `apps/server`, `apps/web`, and small shared packages.
@@ -81,7 +81,7 @@ Recommended default:
 
 Why this shape: a long-running server suits authoritative sessions, credential custody, queues, and LAN/cloud adapters better than a serverless-first framework. TypeScript allows the domain, renderer, server, and web client to share command/view contracts without sharing secret-bearing transport code. The workspace boundaries remain deployable without turning the early project into many independently versioned services.
 
-Owner approval is required before scaffolding. We should also record the package manager and minimum runtime version in the first implementation PR.
+The stack is an engineering decision based on the platform constraints; the owner is not expected to choose framework plumbing. Slice 1 pins Node 22.23.1 for development/CI and TypeScript 6.0.x for compatibility with the current typed linting toolchain. Fastify and SQLite will be added only when the authoritative session slice needs them.
 
 ### Gate B — signature physical transition, during the first hardware spike
 
@@ -584,10 +584,9 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 1. Commit the research, plan, and README as the documentation baseline.
 2. Point `main` at that root commit and switch to `codex/simulator-foundation`.
-3. Resolve Gate A with the owner before installing dependencies.
-4. Sketch and approve the first six physical screen fixtures.
-5. Implement and test the exact renderer/simulator foundation.
-6. Open the first draft PR only after its local checks and visual fixture review pass.
-7. Merge, then begin the early transport/transition spike before broader game mechanics.
+3. Implement and test the exact renderer/simulator foundation using the resolved Gate A stack.
+4. Review the first six physical screen fixtures locally.
+5. Open the first draft PR only after its local checks and visual fixture review pass.
+6. Merge, then begin the early transport/transition spike before broader game mechanics.
 
 The order is intentional: first make board states exact and cheap to inspect, then prove the real mechanical reveal, then build the game loop on verified physical behavior.
