@@ -324,7 +324,7 @@ These principles constrain later design without deciding it:
 - Canonical remote: `https://github.com/paulditterline/vestaquest.git` (`origin`).
 - Keep `main` clean and do implementation/documentation work on focused feature branches. Use the `codex/` prefix for agent-created branches unless the owner requests another name.
 - Add a useful `README.md` with the first implementation slice. It should describe the game, local setup, simulator, tests, transport modes, credential handling, and physical-board test workflow based on code that actually exists; do not fill it with speculative commands before the stack is chosen.
-- No technology stack has been selected. Discuss it before scaffolding.
+- The Slice 1 stack was selected on 2026-08-09: Node.js 22, strict TypeScript, npm workspaces, React with Vite for the simulator/controller, Vitest, Playwright, ESLint, and Prettier. Fastify and SQLite behind interfaces are planned when the authoritative session server begins. Revisit a choice only when implementation evidence or a Vestaboard platform requirement justifies an ADR.
 - Keep domain rules, presentation/layout, Vestaboard transport, and web UI as separate modules.
 - Keep external APIs behind typed interfaces and validate all inbound/outbound payloads.
 - Prefer small commits once version control begins. Never commit credentials, generated session data, or player personal data.

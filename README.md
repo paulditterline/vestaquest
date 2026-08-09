@@ -8,9 +8,29 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-VestaQuest is at the implementation-planning stage. Research and the initial product/design conversation are recorded, but no application dependencies or runtime have been selected yet. There is not a runnable build in this repository today.
+Implementation is underway. The first feature branch contains a deterministic Vestaboard character/layout package and a runnable local Flagship simulator. It includes review fixtures for the title, class selection, HP/combat HUD, choice confirmation, initiative reveal, and death epitaph. No code sends messages to a Vestaboard yet.
 
-The first implementation branch will build a deterministic 6x22 renderer and local simulator. This lets us design and test most of the game without making the physical Vestaboard flap on every edit.
+## Run the Board Lab
+
+Requirements: Node.js 22.13 or newer. The repository pins the development and CI version in `.nvmrc`.
+
+```sh
+nvm use
+npm ci
+npm run dev
+```
+
+Then open [http://127.0.0.1:5173](http://127.0.0.1:5173). The Board Lab can switch between black and white Flagship shells, inspect fixture sequences, highlight changed cells, and expose the authoritative character-code arrays.
+
+To run the complete local verification suite:
+
+```sh
+npm run check
+npx playwright install chromium
+npm run test:e2e
+```
+
+The browser download is a one-time local setup step. None of these commands requires a Vestaboard token or network access to a board.
 
 ## What makes it a Vestaboard game
 
@@ -58,7 +78,7 @@ Each feature branch is tested locally before a PR. Critical layouts then graduat
 - New board states require exact 6x22 numeric snapshots plus readable review fixtures.
 - Credentials, `.env` files, generated session data, and player personal data are never committed.
 
-Local setup and verification commands will be added here after the implementation stack is approved and scaffolded. The recommended stack and its rationale are documented at Gate A in `PLAN.md`.
+The selected stack and its rationale are documented at Gate A in `PLAN.md`.
 
 ## Vestaboard references
 
