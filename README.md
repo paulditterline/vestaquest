@@ -8,7 +8,7 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-Implementation is underway. Slices 0–2 are complete: the deterministic board package, Flagship simulator, server-only Cloud transport, and ordered cadence queue are merged. The signature initiative sequence has been validated on the owner's physical black-shell Flagship; Wave/Fast produced the accepted left-to-right roll reveal while preserving and restoring the owner's normal transition setting. Slice 3 is in progress on `codex/game-kernel`: the deterministic game kernel, versioned controller contracts, semantic board renderers, and authoritative in-memory session service are implemented. The minimal controller, durable private persistence, and end-to-end delivery loop remain.
+Implementation is underway. Slices 0–2 are complete: the deterministic board package, Flagship simulator, server-only Cloud transport, and ordered cadence queue are merged. The signature initiative sequence has been validated on the owner's physical black-shell Flagship; Wave/Fast produced the accepted left-to-right roll reveal while preserving and restoring the owner's normal transition setting. Slice 3 is in progress on `codex/game-kernel`: the deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, and minimal numbered controller are implemented. Durable private persistence and the end-to-end board-delivery composition remain; controller mode is therefore still an internal component rather than a runnable local game.
 
 ## Run the Board Lab
 

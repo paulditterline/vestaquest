@@ -416,7 +416,7 @@ Status: **In progress**
 
 Branch: `codex/game-kernel`
 
-Current checkpoint: the deterministic kernel, versioned controller contracts, semantic 6x22 vertical-slice renderers, and authoritative in-memory session service are implemented and covered by replay, idempotency, concurrency, and exact-layout tests. The controller, durable private persistence, and complete delivery loop remain.
+Current checkpoint: the deterministic kernel, versioned controller contracts, semantic 6x22 vertical-slice renderers, authoritative in-memory session service, sanitized Fastify routes, and minimal numbered controller are implemented and covered by replay, idempotency, HTTP concurrency, controller-recovery, and exact-layout tests. Durable private persistence and the complete board-delivery composition remain.
 
 Build:
 

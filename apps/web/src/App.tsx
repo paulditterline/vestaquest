@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { SessionIdSchema, type SessionId } from '@vestaquest/contracts';
 import {
   CHARACTER_CODE,
   createFixtureCatalog,
@@ -9,6 +10,57 @@ import {
   type BoardShell,
   type FlagshipLayout,
 } from '@vestaquest/board';
+import { ControllerApp } from './Controller.js';
+import type { ControllerApi } from './controller-client.js';
+
+const controllerSessionKey = 'vestaquest.controller.session';
+
+const unavailableControllerApi: ControllerApi = {
+  createSession: () => Promise.reject(new Error('Controller API unavailable.')),
+  getSession: () => Promise.reject(new Error('Controller API unavailable.')),
+  commandSession: () =>
+    Promise.reject(new Error('Controller API unavailable.')),
+};
+
+export type AppProps = Readonly<{
+  controllerApi?: ControllerApi;
+}>;
+
+export function App({ controllerApi = unavailableControllerApi }: AppProps) {
+  if (
+    new URLSearchParams(window.location.search).get('mode') === 'controller'
+  ) {
+    return (
+      <ControllerApp
+        api={controllerApi}
+        onSession={storeControllerSession}
+        {...readControllerSessionProps()}
+      />
+    );
+  }
+
+  return <BoardLab />;
+}
+
+function readControllerSessionProps(): Readonly<{
+  resumeSessionId?: SessionId;
+}> {
+  try {
+    const stored = window.localStorage.getItem(controllerSessionKey);
+    return stored ? { resumeSessionId: SessionIdSchema.parse(stored) } : {};
+  } catch {
+    return {};
+  }
+}
+
+function storeControllerSession(sessionId: SessionId): void {
+  try {
+    window.localStorage.setItem(controllerSessionKey, sessionId);
+  } catch {
+    // Storage can be unavailable in private browsing. The active session still
+    // works; only resume across reloads is affected.
+  }
+}
 
 function readInitialShell(): BoardShell {
   return new URLSearchParams(window.location.search).get('shell') === 'white'
@@ -148,7 +200,7 @@ function fixtureById(
   return fixtures.find((fixture) => fixture.id === id) ?? fixtures[0]!;
 }
 
-export function App() {
+function BoardLab() {
   const [shell, setShell] = useState<BoardShell>(readInitialShell);
   const fixtures = useMemo(() => createFixtureCatalog(shell), [shell]);
   const [fixtureId, setFixtureId] = useState(readInitialFixtureId);

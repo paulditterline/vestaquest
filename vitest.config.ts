@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     coverage: {
       include: [
+        'apps/server/src/**/*.ts',
         'packages/board/src/**/*.ts',
         'packages/contracts/src/**/*.ts',
         'packages/game/src/**/*.ts',
@@ -11,6 +12,6 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
     },
-    include: ['packages/**/test/**/*.test.ts'],
+    include: ['apps/**/test/**/*.test.ts', 'packages/**/test/**/*.test.ts'],
   },
 });
