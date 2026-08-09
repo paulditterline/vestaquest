@@ -8,7 +8,7 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-Implementation is underway. The deterministic board package and Flagship simulator are complete. The current transport slice adds an in-memory adapter, a server-only Cloud Read/Write adapter, and an ordered cadence queue that protects essential reveals. A locked, dry-run-first transition harness is ready for Digital and physical review, but no live board validation has been performed yet.
+Implementation is underway. Slices 0–2 are complete: the deterministic board package, Flagship simulator, server-only Cloud transport, and ordered cadence queue are merged. The signature initiative sequence has been validated on the owner's physical black-shell Flagship; Wave/Fast produced the accepted left-to-right roll reveal while preserving and restoring the owner's normal transition setting. Slice 3—the deterministic game/session kernel and minimal numbered controller—is now in progress on `codex/game-kernel`.
 
 ## Run the Board Lab
 
@@ -41,6 +41,8 @@ npm run transition:spike -- --fixture initiative
 ```
 
 This is always a dry run unless the explicit live gates are satisfied. The supported transition fixtures are title, choice marker, initiative, and HP loss. See [`docs/hardware/transition-spike.md`](./docs/hardware/transition-spike.md) before any Digital or physical test. Live credentials belong only in an ignored local `.env`; `.env.example` never contains tokens or satisfied write acknowledgements.
+
+Gate B selected Wave/Fast for opposed-roll reveals after physical testing. Classic changed only necessary cells but revealed the roll and verdict together; Wave/Gentle had the right order but was too slow. Local API column behavior remains an optional later experiment.
 
 ## What makes it a Vestaboard game
 

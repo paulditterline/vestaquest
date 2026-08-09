@@ -4,7 +4,7 @@ This file is the durable technical and product context for agents working in thi
 
 ## Current stage and design gate
 
-The initial research and design conversation is complete, `PLAN.md` is approved, and implementation is underway. The project is currently in Slice 2: transport queue and transition spike. Gate B still requires explicit Digital and physical-board validation; working in this repository does not itself authorize live writes. Preserve the owner-confirmed direction below. Do **not** silently settle the remaining open balance, content, distribution, or technology decisions; resolve them at the decision gates in `PLAN.md` or bring them back to the owner.
+The initial research and design conversation is complete, `PLAN.md` is approved, and implementation is underway. The project is currently in Slice 3: vertical game kernel. Gate B's Cloud/physical decision was resolved on 2026-08-09: use Wave/Fast for opposed-roll reveals, temporarily applying and then restoring the owner's board preference. Local API refinement remains optional. Preserve the owner-confirmed direction below. Do **not** silently settle the remaining open balance, content, distribution, or technology decisions; resolve them at the decision gates in `PLAN.md` or bring them back to the owner.
 
 Continue to distinguish clearly between:
 

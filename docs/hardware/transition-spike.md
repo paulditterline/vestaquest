@@ -34,6 +34,19 @@ The recovery command reads the recorded target and original preference, restores
 
 ## Gate B observation sheet
 
+### Recorded physical findings — 2026-08-09
+
+- Target: black-shell physical Flagship through the Cloud API.
+- Fixture: two-frame opposed initiative roll.
+- Classic/Gentle: unchanged cells stayed still, but roll tiles, numbers, and verdict appeared effectively together.
+- Wave/Gentle: correct left-to-right order—roll track, result numbers, then verdict—but too slow.
+- Wave/Fast: correct order at an acceptable pace; accepted for the current VestaQuest design.
+- The harness restored the owner's previous transition preference after every run.
+- Decision: use Wave/Fast for opposed-roll reveals. Accept its extra flap movement for now.
+- Deferred: test Local API `column` for finer per-message behavior if Local API access is enabled. Do not assume it preserves unchanged cells until verified physically.
+
+### Future observations
+
 For each Digital and physical run, record:
 
 - target and date;
