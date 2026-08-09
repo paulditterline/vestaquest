@@ -241,6 +241,25 @@ describe('VestaQuest screen fixtures', () => {
     expect(scaffold[5].every((code) => code === 0)).toBe(true);
   });
 
+  it('reveals HP loss by changing the number and exactly one health tile', () => {
+    const fixture = createFixtureCatalog('black').find(
+      ({ id }) => id === 'hp-loss',
+    )!;
+    const before = fixture.frames[0]!.layout;
+    const after = fixture.frames[1]!.layout;
+    const changes = after.flatMap((row, rowIndex) =>
+      row.flatMap((code, columnIndex) =>
+        code === before[rowIndex]?.[columnIndex]
+          ? []
+          : [[rowIndex, columnIndex, code]],
+      ),
+    );
+    expect(changes).toEqual([
+      [1, 3, 28],
+      [1, 10, CHARACTER_CODE.RED],
+    ]);
+  });
+
   it('uses shell-aware healthy HP and title accents', () => {
     const black = createFixtureCatalog('black');
     const white = createFixtureCatalog('white');

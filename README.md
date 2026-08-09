@@ -8,7 +8,7 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-Implementation is underway. The first feature branch contains a deterministic Vestaboard character/layout package and a runnable local Flagship simulator. It includes review fixtures for the title, class selection, HP/combat HUD, choice confirmation, initiative reveal, and death epitaph. No code sends messages to a Vestaboard yet.
+Implementation is underway. The deterministic board package and Flagship simulator are complete. The current transport slice adds an in-memory adapter, a server-only Cloud Read/Write adapter, and an ordered cadence queue that protects essential reveals. A locked, dry-run-first transition harness is ready for Digital and physical review, but no live board validation has been performed yet.
 
 ## Run the Board Lab
 
@@ -31,6 +31,16 @@ npm run test:e2e
 ```
 
 The browser download is a one-time local setup step. None of these commands requires a Vestaboard token or network access to a board.
+
+## Transition spike
+
+Exercise the initiative sequence through the in-memory transport and queue:
+
+```sh
+npm run transition:spike -- --fixture initiative
+```
+
+This is always a dry run unless the explicit live gates are satisfied. The supported transition fixtures are title, choice marker, initiative, and HP loss. See [`docs/hardware/transition-spike.md`](./docs/hardware/transition-spike.md) before any Digital or physical test. Live credentials belong only in an ignored local `.env`; `.env.example` never contains tokens or satisfied write acknowledgements.
 
 ## What makes it a Vestaboard game
 
@@ -69,6 +79,7 @@ Each feature branch is tested locally before a PR. Critical layouts then graduat
 
 - [`PLAN.md`](./PLAN.md) — architecture, decision gates, delivery slices, test strategy, and branch/PR workflow.
 - [`AGENTS.md`](./AGENTS.md) — durable product requirements, verified Vestaboard constraints, API research, and project guardrails.
+- [`docs/architecture/transport-queue.md`](./docs/architecture/transport-queue.md) — ordering, cadence, retry, ambiguity, and Slice 3 durability boundaries.
 
 ## Repository workflow
 

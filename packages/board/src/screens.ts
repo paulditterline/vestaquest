@@ -93,17 +93,38 @@ export function renderClassSelect(
   return writeText(layout, 'S SKILL     L LUCK', { row: 5, column: 0 });
 }
 
-export function renderCombatHud(shell: BoardShell): FlagshipLayout {
+export function renderCombatHud(
+  shell: BoardShell,
+  currentHp = 2,
+  maximumHp = 4,
+): FlagshipLayout {
+  if (
+    !Number.isInteger(currentHp) ||
+    !Number.isInteger(maximumHp) ||
+    maximumHp < 1 ||
+    maximumHp > 10 ||
+    currentHp < 0 ||
+    currentHp > maximumHp
+  ) {
+    throw new RangeError(
+      'Combat HUD HP must be integers with 0 <= current <= maximum <= 10.',
+    );
+  }
   const healthy = accentForShell(shell);
   let layout = createFlagshipLayout();
   layout = writeText(layout, 'WARRIOR          LVL 2', { row: 0, column: 0 });
-  layout = writeText(layout, 'HP 2/4', { row: 1, column: 0 });
-  layout = withCells(layout, [
-    { row: 1, column: 8, code: healthy },
-    { row: 1, column: 9, code: healthy },
-    { row: 1, column: 10, code: CHARACTER_CODE.RED },
-    { row: 1, column: 11, code: CHARACTER_CODE.RED },
-  ]);
+  layout = writeText(layout, `HP ${currentHp}/${maximumHp}`, {
+    row: 1,
+    column: 0,
+  });
+  layout = withCells(
+    layout,
+    Array.from({ length: maximumHp }, (_, index) => ({
+      row: 1,
+      column: 8 + index,
+      code: index < currentHp ? healthy : CHARACTER_CODE.RED,
+    })),
+  );
   layout = writeText(layout, 'POWER 4    DEFENSE 5', { row: 2, column: 0 });
   layout = writeText(layout, 'SKILL 2     LUCK 2', { row: 3, column: 0 });
   layout = writeText(layout, '1 ATTACK    2 SMASH', { row: 4, column: 0 });
@@ -240,6 +261,26 @@ export function createFixtureCatalog(
           label: 'Choice accepted',
           accessibleSummary: 'Selected choice 1, Bash the door.',
           layout: choiceAfter,
+        },
+      ],
+    },
+    {
+      id: 'hp-loss',
+      label: 'HP loss reveal',
+      description:
+        'One healthy tile turns red while the combat HUD remains stable.',
+      frames: [
+        {
+          id: 'hp-before',
+          label: 'Before damage',
+          accessibleSummary: 'Warrior has 3 of 4 HP.',
+          layout: renderCombatHud(shell, 3, 4),
+        },
+        {
+          id: 'hp-after',
+          label: 'After damage',
+          accessibleSummary: 'Warrior has 2 of 4 HP after taking damage.',
+          layout: renderCombatHud(shell, 2, 4),
         },
       ],
     },
