@@ -129,6 +129,12 @@ export class ControllerClient {
     return this.#connectRequest;
   }
 
+  public startNew(): Promise<void> {
+    if (this.#connectRequest) return this.#connectRequest;
+    this.#setSnapshot(Object.freeze({ connection: 'connecting' }));
+    return this.connect();
+  }
+
   public async choose(choice: ChoiceNumber): Promise<void> {
     const current = this.#snapshot;
     if (

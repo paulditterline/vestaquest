@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "dev": "node --import tsx src/dev.ts",
     "test": "vitest run --root ../.. apps/server/test",
     "typecheck": "tsc -p tsconfig.json"
   },

@@ -8,7 +8,7 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-Implementation is underway. Slices 0–2 are complete: the deterministic board package, Flagship simulator, server-only Cloud transport, and ordered cadence queue are merged. The signature initiative sequence has been validated on the owner's physical black-shell Flagship; Wave/Fast produced the accepted left-to-right roll reveal while preserving and restoring the owner's normal transition setting. Slice 3 is in progress on `codex/game-kernel`: the deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, and ordered presentation coordinator are implemented. The complete HTTP → memory-board path is covered by integration tests, including controller polling while the board catches up. Durable private persistence and a runnable local server/web composition remain; controller mode is therefore still an internal component rather than a supported local game command.
+Implementation is underway. Slices 0–2 are complete: the deterministic board package, Flagship simulator, server-only Cloud transport, and ordered cadence queue are merged. The signature initiative sequence has been validated on the owner's physical black-shell Flagship; Wave/Fast produced the accepted left-to-right roll reveal while preserving and restoring the owner's normal transition setting. Slice 3 is in progress on `codex/game-kernel`: the deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, and runnable private development composition are implemented. Durable private persistence remains; restarting the development server currently erases its sessions.
 
 ## Run the Board Lab
 
@@ -20,7 +20,13 @@ npm ci
 npm run dev
 ```
 
-Then open [http://127.0.0.1:5173](http://127.0.0.1:5173). The Board Lab can switch between black and white Flagship shells, inspect fixture sequences, highlight changed cells, and expose the authoritative character-code arrays.
+Then open:
+
+- [Playable Board Lab](http://127.0.0.1:5173/?mode=play&shell=black) for the live in-memory vertical slice and its minimal numbered controller.
+- [Flagship Board Lab](http://127.0.0.1:5173/) for static fixture sequences, shell colors, changed cells, and authoritative character-code arrays.
+- [Controller only](http://127.0.0.1:5173/?mode=controller) for the phone-sized input surface.
+
+The command starts both loopback services: Fastify on port 8787 and Vite on port 5173. No Vestaboard token is used; the playable lab renders the server's in-memory board transport.
 
 To run the complete local verification suite:
 

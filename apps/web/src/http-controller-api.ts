@@ -34,7 +34,7 @@ export class FetchControllerApi implements ControllerApi {
 
   public constructor(options: FetchControllerApiOptions = {}) {
     this.#basePath = normalizeBasePath(options.basePath ?? '/api');
-    this.#fetch = options.fetch ?? globalThis.fetch;
+    this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
   public async createSession(request: CreateSessionRequest): Promise<unknown> {

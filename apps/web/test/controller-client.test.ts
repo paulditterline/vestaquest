@@ -134,6 +134,22 @@ describe('ControllerClient', () => {
     });
   });
 
+  it('can abandon a missing saved session and create a new game', async () => {
+    const api = new FakeControllerApi();
+    api.getResult = Promise.reject(new Error('session missing'));
+    const client = new ControllerClient({ api });
+
+    await client.connect(readyResponse.sessionId);
+    expect(client.getSnapshot().connection).toBe('offline');
+
+    await client.startNew();
+    expect(api.createRequests).toEqual([{ protocolVersion: PROTOCOL_VERSION }]);
+    expect(client.getSnapshot()).toMatchObject({
+      connection: 'connected',
+      sessionId: readyResponse.sessionId,
+    });
+  });
+
   it('ignores choices that are not currently legal', async () => {
     const api = new FakeControllerApi();
     const client = new ControllerClient({ api });
@@ -229,6 +245,7 @@ describe('ControllerPanel', () => {
           view: readyResponse.view,
         },
         onChoose: () => undefined,
+        onNewSession: () => undefined,
         onReconnect: () => undefined,
       }),
     );
@@ -257,6 +274,7 @@ describe('ControllerPanel', () => {
             },
           },
           onChoose: () => undefined,
+          onNewSession: () => undefined,
           onReconnect: () => undefined,
         }),
       );

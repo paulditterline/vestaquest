@@ -5,6 +5,13 @@ export {
 export type { SessionRepository } from './repository.js';
 export { buildHttpServer } from './http.js';
 export type { HttpServerDependencies } from './http.js';
+export {
+  DEFAULT_DEVELOPMENT_PORT,
+  DEVELOPMENT_HOST,
+  createDevelopmentComposition,
+  parseDevelopmentPort,
+} from './development.js';
+export type { DevelopmentComposition } from './development.js';
 export { PresentationCoordinator } from './presentation-coordinator.js';
 export type {
   PresentationCoordinatorDependencies,
