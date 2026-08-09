@@ -11,7 +11,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @vestaquest/board && npm run build -w @vestaquest/transport && npm run build -w @vestaquest/web",
+    "build": "npm run build -w @vestaquest/board && npm run build -w @vestaquest/game && npm run build -w @vestaquest/contracts && npm run build -w @vestaquest/transport && npm run build -w @vestaquest/web",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
     "dev": "npm run dev -w @vestaquest/web --",
     "format": "prettier --write .",
