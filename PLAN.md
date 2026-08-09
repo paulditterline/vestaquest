@@ -192,7 +192,7 @@ Content can begin in `packages/game` as data modules. Extract a separate content
 
 - A run has a persisted seed. The seed plus ordered accepted commands must make outcomes reproducible.
 - The server is authoritative for random rolls. The browser never supplies results.
-- Each displayed choice has a stable choice ID and visible number. A command includes session ID, view/version ID, choice ID, and an idempotency key.
+- Each displayed choice has a stable choice ID and visible number. The controller command includes the session ID, expected view version, visible choice number, and an idempotency key; the authoritative session service maps that number to the current stable choice ID.
 - Input is accepted only for the current actionable view. Duplicate commands return the existing result; stale or simultaneous commands cannot advance the state twice.
 - Domain transitions emit semantic views and optional timing intent, never raw Vestaboard calls.
 - Counters such as rooms found, enemies slain, and cause of death update inside the same atomic transition as the underlying event.
@@ -415,6 +415,8 @@ Local API support can enter this slice if the board is already enabled; otherwis
 Status: **In progress**
 
 Branch: `codex/game-kernel`
+
+Current checkpoint: the deterministic kernel, versioned controller contracts, semantic 6x22 vertical-slice renderers, and authoritative in-memory session service are implemented and covered by replay, idempotency, concurrency, and exact-layout tests. The controller, durable private persistence, and complete delivery loop remain.
 
 Build:
 

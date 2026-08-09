@@ -1,5 +1,5 @@
 {
-  "name": "@vestaquest/board",
+  "name": "@vestaquest/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,9 +8,11 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run test",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@vestaquest/contracts": "0.0.0",
     "@vestaquest/game": "0.0.0"
   }
 }
