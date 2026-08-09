@@ -4,8 +4,10 @@ import {
   type SessionId,
 } from '@vestaquest/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
+import { BoardOutputQueue, MemoryBoardTransport } from '@vestaquest/transport';
 import {
   InMemorySessionRepository,
+  PresentationCoordinator,
   SessionService,
   buildHttpServer,
   type SessionIdFactory,
@@ -37,6 +39,36 @@ function createHarness() {
   return { repository, server, service };
 }
 
+function createDispatchingHarness() {
+  let nextId = 0;
+  let now = 20_000;
+  const repository = new InMemorySessionRepository();
+  const service = new SessionService({
+    repository,
+    ids: {
+      nextSessionId: () => `live-session-${++nextId}`,
+      nextReceiptId: () => `live-receipt-${++nextId}`,
+      nextPresentationId: () => `live-presentation-${++nextId}`,
+    },
+    clock: { now: () => now++ },
+    seeds: { nextSeed: () => 1 },
+  });
+  const transport = new MemoryBoardTransport();
+  const queue = new BoardOutputQueue(transport);
+  const coordinator = new PresentationCoordinator({
+    shell: 'black',
+    queue,
+    service,
+    repository,
+  });
+  const server = buildHttpServer({
+    sessionService: service,
+    presentationDispatcher: coordinator,
+  });
+  servers.push(server);
+  return { server, transport };
+}
+
 async function createSession(
   server: ReturnType<typeof buildHttpServer>,
 ): Promise<SessionId> {
@@ -64,7 +96,81 @@ function commandPayload(
   };
 }
 
+async function pollView(
+  server: ReturnType<typeof buildHttpServer>,
+  sessionId: SessionId,
+  status: 'ready' | 'blocked' | 'complete',
+) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}?protocolVersion=1`,
+    });
+    const body = CreateSessionResponseSchema.parse(response.json());
+    if (body.view.display.status === status) return body.view;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error(`Session did not reach display status ${status}.`);
+}
+
 describe('Fastify session API', () => {
+  it('dispatches created and accepted presentation output in the background', async () => {
+    const { server, transport } = createDispatchingHarness();
+    const sessionId = await createSession(server);
+
+    const classView = await pollView(server, sessionId, 'ready');
+    expect(classView).toMatchObject({
+      version: 0,
+      kind: 'class-select',
+      display: { legalChoices: [1, 2, 3] },
+    });
+    expect(transport.attempts).toHaveLength(2);
+
+    const submitted = await server.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/commands`,
+      payload: commandPayload(sessionId, 'http-choice', 0, 2),
+    });
+    expect(submitted.statusCode).toBe(200);
+    expect(submitted.json()).toMatchObject({
+      outcome: 'accepted',
+      view: { version: 1, display: { status: 'locked' } },
+    });
+
+    const roomView = await pollView(server, sessionId, 'ready');
+    expect(roomView).toMatchObject({
+      version: 1,
+      kind: 'placeholder-room',
+      display: { legalChoices: [1] },
+    });
+    expect(transport.attempts).toHaveLength(3);
+  });
+
+  it('contains and reports a rejected background dispatch', async () => {
+    const { service } = createHarness();
+    const failure = new Error('test dispatcher failure');
+    let observe!: (error: unknown) => void;
+    const observed = new Promise<unknown>((resolve) => {
+      observe = resolve;
+    });
+    const server = buildHttpServer({
+      sessionService: service,
+      presentationDispatcher: {
+        dispatch: () => Promise.reject(failure),
+      },
+      onBackgroundDispatchError: observe,
+    });
+    servers.push(server);
+
+    const sessionId = await createSession(server);
+    await expect(observed).resolves.toBe(failure);
+    const resumed = await server.inject({
+      method: 'GET',
+      url: `/api/sessions/${sessionId}?protocolVersion=1`,
+    });
+    expect(resumed.statusCode).toBe(200);
+  });
+
   it('creates and resumes a session without exposing internal receipts or secrets', async () => {
     const { server } = createHarness();
     const sessionId = await createSession(server);

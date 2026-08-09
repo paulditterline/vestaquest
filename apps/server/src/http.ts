@@ -5,6 +5,7 @@ import {
   PROTOCOL_VERSION,
   SessionIdSchema,
   type ControllerView,
+  type SessionId,
 } from '@vestaquest/contracts';
 import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
 import {
@@ -14,6 +15,10 @@ import {
 
 export type HttpServerDependencies = Readonly<{
   sessionService: SessionService;
+  presentationDispatcher?: Readonly<{
+    dispatch: (sessionId: SessionId) => Promise<unknown>;
+  }>;
+  onBackgroundDispatchError?: (error: unknown) => void;
 }>;
 
 type ErrorCode =
@@ -39,6 +44,7 @@ export function buildHttpServer(
     if (!parsed.success) return validationError(reply);
 
     const response = await dependencies.sessionService.createSession();
+    startPresentationDispatch(dependencies, response.sessionId);
     return reply.code(201).send(response);
   });
 
@@ -88,6 +94,13 @@ export function buildHttpServer(
         );
       }
 
+      if (
+        (result.response.outcome === 'accepted' ||
+          result.response.outcome === 'duplicate') &&
+        result.response.view.display.status === 'locked'
+      ) {
+        startPresentationDispatch(dependencies, parsedBody.data.sessionId);
+      }
       const status = commandStatus(result.response.outcome);
       return reply.code(status).send(result.response);
     } catch (error) {
@@ -105,6 +118,23 @@ export function buildHttpServer(
   );
 
   return server;
+}
+
+function startPresentationDispatch(
+  dependencies: HttpServerDependencies,
+  sessionId: SessionId,
+): void {
+  const dispatcher = dependencies.presentationDispatcher;
+  if (!dispatcher) return;
+
+  void dispatcher.dispatch(sessionId).catch((error: unknown) => {
+    try {
+      dependencies.onBackgroundDispatchError?.(error);
+    } catch {
+      // Error observation must never turn a contained background failure into
+      // an unhandled rejection.
+    }
+  });
 }
 
 function sessionRequestCandidate(params: unknown, query: unknown): unknown {

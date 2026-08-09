@@ -31,31 +31,56 @@ export type ControllerSnapshot = Readonly<{
 export type ControllerClientOptions = Readonly<{
   api: ControllerApi;
   idempotencyKey?: () => string;
+  pollIntervalMs?: number;
+  scheduler?: ControllerScheduler;
 }>;
+
+export interface ControllerScheduler {
+  schedule(callback: () => void, delayMs: number): unknown;
+  cancel(handle: unknown): void;
+}
 
 type Subscriber = (snapshot: ControllerSnapshot) => void;
 
 export class ControllerClient {
   readonly #api: ControllerApi;
   readonly #idempotencyKey: () => string;
+  readonly #pollIntervalMs: number;
+  readonly #scheduler: ControllerScheduler;
   readonly #subscribers = new Set<Subscriber>();
   #snapshot: ControllerSnapshot = Object.freeze({
     connection: 'connecting',
   });
   #connectRequest: Promise<void> | undefined;
+  #pollRequest: Promise<void> | undefined;
+  #pollHandle: unknown;
 
   public constructor(options: ControllerClientOptions) {
     this.#api = options.api;
     this.#idempotencyKey =
       options.idempotencyKey ??
       (() => `controller:${Date.now().toString(36)}:${crypto.randomUUID()}`);
+    this.#pollIntervalMs = options.pollIntervalMs ?? 5_000;
+    if (
+      !Number.isFinite(this.#pollIntervalMs) ||
+      this.#pollIntervalMs < 1_000
+    ) {
+      throw new RangeError(
+        'Controller polling interval must be at least 1000ms.',
+      );
+    }
+    this.#scheduler = options.scheduler ?? browserScheduler;
   }
 
   public getSnapshot = (): ControllerSnapshot => this.#snapshot;
 
   public subscribe = (subscriber: Subscriber): (() => void) => {
     this.#subscribers.add(subscriber);
-    return () => this.#subscribers.delete(subscriber);
+    this.#syncPolling();
+    return () => {
+      this.#subscribers.delete(subscriber);
+      this.#syncPolling();
+    };
   };
 
   public connect(resumeSessionId?: SessionId): Promise<void> {
@@ -152,5 +177,74 @@ export class ControllerClient {
   #setSnapshot(snapshot: ControllerSnapshot): void {
     this.#snapshot = snapshot;
     this.#subscribers.forEach((subscriber) => subscriber(snapshot));
+    this.#syncPolling();
+  }
+
+  #syncPolling(): void {
+    const shouldPoll =
+      this.#subscribers.size > 0 &&
+      this.#snapshot.connection === 'connected' &&
+      this.#snapshot.view?.display.status === 'locked' &&
+      this.#snapshot.sessionId !== undefined;
+
+    if (!shouldPoll) {
+      if (this.#pollHandle !== undefined) {
+        this.#scheduler.cancel(this.#pollHandle);
+        this.#pollHandle = undefined;
+      }
+      return;
+    }
+
+    if (this.#pollHandle === undefined && this.#pollRequest === undefined) {
+      this.#pollHandle = this.#scheduler.schedule(() => {
+        this.#pollHandle = undefined;
+        const request = this.#pollLockedView();
+        this.#pollRequest = request;
+        void request.then(() => {
+          if (this.#pollRequest === request) this.#pollRequest = undefined;
+          this.#syncPolling();
+        });
+      }, this.#pollIntervalMs);
+    }
+  }
+
+  async #pollLockedView(): Promise<void> {
+    const current = this.#snapshot;
+    if (
+      current.connection !== 'connected' ||
+      !current.sessionId ||
+      current.view?.display.status !== 'locked'
+    ) {
+      return;
+    }
+
+    try {
+      const response = GetSessionResponseSchema.parse(
+        await this.#api.getSession({
+          protocolVersion: PROTOCOL_VERSION,
+          sessionId: current.sessionId,
+        }),
+      );
+      this.#setSnapshot(
+        Object.freeze({
+          connection: 'connected',
+          sessionId: response.sessionId,
+          view: response.view,
+        }),
+      );
+    } catch {
+      this.#setSnapshot(
+        Object.freeze({
+          connection: 'offline',
+          sessionId: current.sessionId,
+          view: current.view,
+        }),
+      );
+    }
   }
 }
+
+const browserScheduler: ControllerScheduler = {
+  schedule: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
+  cancel: (handle) => globalThis.clearTimeout(handle as number),
+};

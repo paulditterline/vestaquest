@@ -12,21 +12,17 @@ import {
 } from '@vestaquest/board';
 import { ControllerApp } from './Controller.js';
 import type { ControllerApi } from './controller-client.js';
+import { FetchControllerApi } from './http-controller-api.js';
 
 const controllerSessionKey = 'vestaquest.controller.session';
 
-const unavailableControllerApi: ControllerApi = {
-  createSession: () => Promise.reject(new Error('Controller API unavailable.')),
-  getSession: () => Promise.reject(new Error('Controller API unavailable.')),
-  commandSession: () =>
-    Promise.reject(new Error('Controller API unavailable.')),
-};
+const defaultControllerApi = new FetchControllerApi();
 
 export type AppProps = Readonly<{
   controllerApi?: ControllerApi;
 }>;
 
-export function App({ controllerApi = unavailableControllerApi }: AppProps) {
+export function App({ controllerApi = defaultControllerApi }: AppProps) {
   if (
     new URLSearchParams(window.location.search).get('mode') === 'controller'
   ) {

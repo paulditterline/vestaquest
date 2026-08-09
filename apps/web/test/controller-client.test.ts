@@ -12,6 +12,7 @@ import { ControllerPanel } from '../src/Controller.js';
 import {
   ControllerClient,
   type ControllerApi,
+  type ControllerScheduler,
 } from '../src/controller-client.js';
 
 const readyResponse = CreateSessionResponseSchema.parse({
@@ -33,6 +34,16 @@ const lockedResponse = {
     display: { status: 'locked' as const, legalChoices: [] },
   },
 };
+
+const lockedSessionResponse = CreateSessionResponseSchema.parse({
+  protocolVersion: PROTOCOL_VERSION,
+  sessionId: 'session-test',
+  view: {
+    version: 4,
+    kind: 'placeholder-room',
+    display: { status: 'locked', legalChoices: [] },
+  },
+});
 
 describe('ControllerClient', () => {
   it('creates a new session through the versioned API boundary', async () => {
@@ -131,6 +142,81 @@ describe('ControllerClient', () => {
     await client.choose(9);
     expect(api.commandRequests).toEqual([]);
   });
+
+  it('polls a locked display without overlap and stops when it becomes ready', async () => {
+    const poll = deferred<unknown>();
+    const api = new FakeControllerApi();
+    api.createResult = Promise.resolve(lockedSessionResponse);
+    api.getResult = poll.promise;
+    const scheduler = new ManualScheduler();
+    const client = new ControllerClient({
+      api,
+      scheduler,
+    });
+    const unsubscribe = client.subscribe(() => undefined);
+
+    await client.connect();
+    expect(scheduler.delays).toEqual([5_000]);
+
+    scheduler.runNext();
+    expect(api.getRequests).toHaveLength(1);
+    expect(scheduler.pending).toBe(0);
+
+    poll.resolve(readyResponse);
+    await flushPromises();
+    expect(client.getSnapshot().view?.display.status).toBe('ready');
+    expect(scheduler.pending).toBe(0);
+    unsubscribe();
+  });
+
+  it.each(['ready', 'blocked', 'complete'] as const)(
+    'does not poll while the display is %s',
+    async (status) => {
+      const api = new FakeControllerApi();
+      api.createResult = Promise.resolve({
+        ...readyResponse,
+        view: {
+          version: 5,
+          kind: status === 'complete' ? 'victory' : 'class-select',
+          display:
+            status === 'ready'
+              ? { status, legalChoices: [1] }
+              : { status, legalChoices: [] },
+        },
+      });
+      const scheduler = new ManualScheduler();
+      const client = new ControllerClient({
+        api,
+        pollIntervalMs: 1_000,
+        scheduler,
+      });
+      const unsubscribe = client.subscribe(() => undefined);
+
+      await client.connect();
+      expect(scheduler.pending).toBe(0);
+      unsubscribe();
+    },
+  );
+
+  it('moves offline and stops polling when a locked-view refresh fails', async () => {
+    const api = new FakeControllerApi();
+    api.createResult = Promise.resolve(lockedSessionResponse);
+    api.getResult = Promise.reject(new Error('network unavailable'));
+    const scheduler = new ManualScheduler();
+    const client = new ControllerClient({
+      api,
+      pollIntervalMs: 1_000,
+      scheduler,
+    });
+    const unsubscribe = client.subscribe(() => undefined);
+
+    await client.connect();
+    scheduler.runNext();
+    await flushPromises();
+    expect(client.getSnapshot().connection).toBe('offline');
+    expect(scheduler.pending).toBe(0);
+    unsubscribe();
+  });
 });
 
 describe('ControllerPanel', () => {
@@ -185,21 +271,52 @@ class FakeControllerApi implements ControllerApi {
   public readonly createRequests: CreateSessionRequest[] = [];
   public readonly getRequests: GetSessionRequest[] = [];
   public readonly commandRequests: CommandSessionRequest[] = [];
+  public createResult: Promise<unknown> = Promise.resolve(readyResponse);
+  public getResult: Promise<unknown> = Promise.resolve(readyResponse);
   public commandResult: Promise<unknown> = Promise.resolve(lockedResponse);
 
   public createSession(request: CreateSessionRequest): Promise<unknown> {
     this.createRequests.push(request);
-    return Promise.resolve(readyResponse);
+    return this.createResult;
   }
 
   public getSession(request: GetSessionRequest): Promise<unknown> {
     this.getRequests.push(request);
-    return Promise.resolve(readyResponse);
+    return this.getResult;
   }
 
   public commandSession(request: CommandSessionRequest): Promise<unknown> {
     this.commandRequests.push(request);
     return this.commandResult;
+  }
+}
+
+class ManualScheduler implements ControllerScheduler {
+  public readonly delays: number[] = [];
+  readonly #callbacks = new Map<number, () => void>();
+  #nextHandle = 0;
+
+  public get pending(): number {
+    return this.#callbacks.size;
+  }
+
+  public schedule(callback: () => void, delayMs: number): unknown {
+    const handle = ++this.#nextHandle;
+    this.delays.push(delayMs);
+    this.#callbacks.set(handle, callback);
+    return handle;
+  }
+
+  public cancel(handle: unknown): void {
+    if (typeof handle === 'number') this.#callbacks.delete(handle);
+  }
+
+  public runNext(): void {
+    const next = this.#callbacks.entries().next().value as
+      readonly [number, () => void] | undefined;
+    if (!next) throw new Error('No scheduled callback.');
+    this.#callbacks.delete(next[0]);
+    next[1]();
   }
 }
 
@@ -215,4 +332,10 @@ function deferred<T>(): Readonly<{
     promise,
     resolve: (value) => resolvePromise!(value),
   };
+}
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
