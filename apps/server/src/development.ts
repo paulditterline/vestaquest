@@ -1,23 +1,34 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { toNumericRows } from '@vestaquest/board';
+import { renderGameView, toNumericRows } from '@vestaquest/board';
 import {
   DevelopmentBoardProjectionSchema,
   PROTOCOL_VERSION,
   SessionIdSchema,
 } from '@vestaquest/contracts';
 import { BoardOutputQueue, MemoryBoardTransport } from '@vestaquest/transport';
+import { deriveView } from '@vestaquest/game';
 import type { FastifyInstance } from 'fastify';
 import { buildHttpServer } from './http.js';
 import { PresentationCoordinator } from './presentation-coordinator.js';
-import { InMemorySessionRepository } from './repository.js';
+import {
+  InMemorySessionRepository,
+  type SessionRepository,
+} from './repository.js';
 import { SessionNotFoundError, SessionService } from './session-service.js';
 
 export const DEVELOPMENT_HOST = '127.0.0.1' as const;
 export const DEFAULT_DEVELOPMENT_PORT = 8787 as const;
 
+export type DevelopmentRepository = SessionRepository &
+  Partial<Readonly<{ close: () => Promise<void> }>>;
+
+export type DevelopmentCompositionOptions = Readonly<{
+  repository?: DevelopmentRepository;
+}>;
+
 export type DevelopmentComposition = Readonly<{
   server: FastifyInstance;
-  repository: InMemorySessionRepository;
+  repository: DevelopmentRepository;
   sessionService: SessionService;
   transport: MemoryBoardTransport;
   queue: BoardOutputQueue;
@@ -27,10 +38,13 @@ export type DevelopmentComposition = Readonly<{
 
 /**
  * Creates the private local composition. It intentionally contains no Cloud
- * transport, credentials, persistent storage, or non-loopback listener.
+ * transport, credentials, or non-loopback listener.
  */
-export function createDevelopmentComposition(): DevelopmentComposition {
-  const repository = new InMemorySessionRepository();
+export function createDevelopmentComposition(
+  options: DevelopmentCompositionOptions = {},
+): DevelopmentComposition {
+  const repository: DevelopmentRepository =
+    options.repository ?? new InMemorySessionRepository();
   const sessionService = new SessionService({
     repository,
     clock: { now: () => Date.now() },
@@ -71,15 +85,24 @@ export function createDevelopmentComposition(): DevelopmentComposition {
     }
 
     try {
-      const [session, current] = await Promise.all([
-        sessionService.getSession(sessionId.data),
+      const [stored, current, intents] = await Promise.all([
+        repository.get(sessionId.data),
         transport.readCurrent(),
+        repository.listPresentationIntents(sessionId.data),
       ]);
+      if (!stored) throw new SessionNotFoundError(sessionId.data);
+      const hasPendingPresentation = intents.some(
+        (intent) => intent.status === 'pending',
+      );
+      const layout =
+        transport.attempts.length === 0 && !hasPendingPresentation
+          ? renderGameView(deriveView(stored.state))
+          : current.layout;
       const projection = DevelopmentBoardProjectionSchema.parse({
         protocolVersion: PROTOCOL_VERSION,
         sessionId: sessionId.data,
-        viewVersion: session.view.version,
-        characters: toNumericRows(current.layout),
+        viewVersion: stored.state.revision,
+        characters: toNumericRows(layout),
       });
       return reply.code(200).send(projection);
     } catch (error) {
@@ -102,6 +125,7 @@ export function createDevelopmentComposition(): DevelopmentComposition {
     closed = true;
     queue.close({ abort: true });
     await server.close();
+    await repository.close?.();
   };
 
   return Object.freeze({

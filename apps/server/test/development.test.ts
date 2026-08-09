@@ -3,21 +3,29 @@ import {
   DevelopmentBoardProjectionSchema,
   type SessionId,
 } from '@vestaquest/contracts';
-import { toNumericRows } from '@vestaquest/board';
+import { renderGameView, toNumericRows } from '@vestaquest/board';
+import { deriveView } from '@vestaquest/game';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_DEVELOPMENT_PORT,
   DEVELOPMENT_HOST,
   createDevelopmentComposition,
   parseDevelopmentPort,
+  SqliteSessionRepository,
   type DevelopmentComposition,
 } from '../src/index.js';
 
 const compositions: DevelopmentComposition[] = [];
+const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
   await Promise.all(
     compositions.splice(0).map((composition) => composition.close()),
+  );
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true })),
   );
 });
 
@@ -63,6 +71,45 @@ describe('private development composition', () => {
     });
   });
 
+  it('resumes a durable session with its stable simulated board after restart', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'vestaquest-dev-'));
+    temporaryDirectories.push(directory);
+    const path = join(directory, 'sessions.sqlite');
+    const first = createDevelopmentComposition({
+      repository: new SqliteSessionRepository(path),
+    });
+    compositions.push(first);
+    const createdResponse = await first.server.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      payload: { protocolVersion: 1 },
+    });
+    const created = CreateSessionResponseSchema.parse(createdResponse.json());
+    await waitUntilReady(first, created.sessionId);
+    await first.close();
+
+    const restarted = createDevelopmentComposition({
+      repository: new SqliteSessionRepository(path),
+    });
+    compositions.push(restarted);
+    const resumed = await restarted.sessionService.getSession(
+      created.sessionId,
+    );
+    expect(resumed.view.display.status).toBe('ready');
+
+    const projectionResponse = await restarted.server.inject({
+      method: 'GET',
+      url: `/api/development/board/${created.sessionId}`,
+    });
+    const projection = DevelopmentBoardProjectionSchema.parse(
+      projectionResponse.json(),
+    );
+    const stored = await restarted.repository.get(created.sessionId);
+    expect(toNumericRows(renderGameView(deriveView(stored!.state)))).toEqual(
+      projection.characters,
+    );
+  });
+
   it('uses a fixed loopback host and validates its configurable port', () => {
     expect(DEVELOPMENT_HOST).toBe('127.0.0.1');
     expect(DEFAULT_DEVELOPMENT_PORT).toBe(8787);
@@ -85,3 +132,6 @@ async function waitUntilReady(
   }
   throw new Error('Development session did not become ready.');
 }
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';

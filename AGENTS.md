@@ -4,7 +4,7 @@ This file is the durable technical and product context for agents working in thi
 
 ## Current stage and design gate
 
-The initial research and design conversation is complete, `PLAN.md` is approved, and implementation is underway. The project is currently in Slice 3: vertical game kernel. Gate B's Cloud/physical decision was resolved on 2026-08-09: use Wave/Fast for opposed-roll reveals, temporarily applying and then restoring the owner's board preference. Local API refinement remains optional. Preserve the owner-confirmed direction below. Do **not** silently settle the remaining open balance, content, distribution, or technology decisions; resolve them at the decision gates in `PLAN.md` or bring them back to the owner.
+The initial research and design conversation is complete, `PLAN.md` is approved, and implementation is underway. Slice 3's local vertical game kernel is ready for owner review: the playable lab survives process restarts with its stable board state and legal choices intact. The remaining Slice 3 acceptance item is exercising the reviewed vertical path through the Cloud transport. Gate C—the map grammar—is the next creative decision and must be discussed with the owner before Slice 4 content is built. Gate B's Cloud/physical decision was resolved on 2026-08-09: use Wave/Fast for opposed-roll reveals, temporarily applying and then restoring the owner's board preference. Local API refinement remains optional. Preserve the owner-confirmed direction below. Do **not** silently settle the remaining open balance, content, distribution, or technology decisions; resolve them at the decision gates in `PLAN.md` or bring them back to the owner.
 
 Continue to distinguish clearly between:
 
@@ -324,7 +324,7 @@ These principles constrain later design without deciding it:
 - Canonical remote: `https://github.com/paulditterline/vestaquest.git` (`origin`).
 - Keep `main` clean and do implementation/documentation work on focused feature branches. Use the `codex/` prefix for agent-created branches unless the owner requests another name.
 - Add a useful `README.md` with the first implementation slice. It should describe the game, local setup, simulator, tests, transport modes, credential handling, and physical-board test workflow based on code that actually exists; do not fill it with speculative commands before the stack is chosen.
-- The Slice 1 stack was selected on 2026-08-09: Node.js 22, strict TypeScript, npm workspaces, React with Vite for the simulator/controller, Vitest, Playwright, ESLint, and Prettier. Fastify and SQLite behind interfaces are planned when the authoritative session server begins. Revisit a choice only when implementation evidence or a Vestaboard platform requirement justifies an ADR.
+- The Slice 1 stack was selected on 2026-08-09: Node.js 22, strict TypeScript, npm workspaces, React with Vite for the simulator/controller, Vitest, Playwright, ESLint, and Prettier. Fastify now provides the private session API. Private persistence uses Node 22's built-in `node:sqlite` behind `SessionRepository`; ADR 0001 records its active-development risk and isolation. Revisit a choice only when implementation evidence or a Vestaboard platform requirement justifies an ADR.
 - Keep domain rules, presentation/layout, Vestaboard transport, and web UI as separate modules.
 - Keep external APIs behind typed interfaces and validate all inbound/outbound payloads.
 - Prefer small commits once version control begins. Never commit credentials, generated session data, or player personal data.

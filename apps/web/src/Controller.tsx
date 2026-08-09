@@ -99,6 +99,14 @@ export function ControllerPanel({
             New Game
           </button>
         </div>
+      ) : displayStatus === 'complete' ? (
+        <button
+          className="controller-new-game"
+          onClick={onNewSession}
+          type="button"
+        >
+          New Game
+        </button>
       ) : null}
     </section>
   );

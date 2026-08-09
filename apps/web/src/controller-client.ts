@@ -60,7 +60,7 @@ export class ControllerClient {
     this.#idempotencyKey =
       options.idempotencyKey ??
       (() => `controller:${Date.now().toString(36)}:${crypto.randomUUID()}`);
-    this.#pollIntervalMs = options.pollIntervalMs ?? 5_000;
+    this.#pollIntervalMs = options.pollIntervalMs ?? 1_000;
     if (
       !Number.isFinite(this.#pollIntervalMs) ||
       this.#pollIntervalMs < 1_000

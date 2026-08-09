@@ -12,6 +12,10 @@ export {
   parseDevelopmentPort,
 } from './development.js';
 export type { DevelopmentComposition } from './development.js';
+export type {
+  DevelopmentCompositionOptions,
+  DevelopmentRepository,
+} from './development.js';
 export { PresentationCoordinator } from './presentation-coordinator.js';
 export type {
   PresentationCoordinatorDependencies,
@@ -19,6 +23,10 @@ export type {
 } from './presentation-coordinator.js';
 export { SessionNotFoundError, SessionService } from './session-service.js';
 export type { SessionServiceDependencies } from './session-service.js';
+export {
+  PersistenceCorruptionError,
+  SqliteSessionRepository,
+} from './sqlite-repository.js';
 export type {
   CommandReceipt,
   PresentationIntent,

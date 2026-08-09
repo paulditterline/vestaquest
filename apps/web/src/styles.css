@@ -177,6 +177,11 @@ main {
   margin-top: 1.5rem;
 }
 
+.controller-new-game {
+  width: 100%;
+  margin-top: 1.5rem;
+}
+
 .play-lab {
   width: min(100% - 2rem, 100rem);
   padding-top: 2rem;

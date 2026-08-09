@@ -172,7 +172,7 @@ describe('ControllerClient', () => {
     const unsubscribe = client.subscribe(() => undefined);
 
     await client.connect();
-    expect(scheduler.delays).toEqual([5_000]);
+    expect(scheduler.delays).toEqual([1_000]);
 
     scheduler.runNext();
     expect(api.getRequests).toHaveLength(1);
@@ -281,6 +281,7 @@ describe('ControllerPanel', () => {
 
       expect(html).toContain(status.toUpperCase());
       expect(html).not.toContain('aria-label="Choices"');
+      if (status === 'complete') expect(html).toContain('New Game');
     },
   );
 });

@@ -412,11 +412,11 @@ Local API support can enter this slice if the board is already enabled; otherwis
 
 ### Slice 3 — vertical game kernel
 
-Status: **In progress**
+Status: **Ready for owner review**
 
 Branch: `codex/game-kernel`
 
-Current checkpoint: the deterministic kernel, versioned controller contracts, semantic 6x22 vertical-slice renderers, authoritative in-memory session service, sanitized Fastify routes, minimal numbered controller, presentation coordinator, and loopback-only playable development composition are implemented. Integration tests cover HTTP → ordered memory-board delivery → display unlock plus controller polling/recovery, replay, idempotency, concurrency, and exact layouts. Durable private persistence remains before Slice 3 acceptance can be evaluated across process restarts.
+Current checkpoint: the deterministic kernel, versioned controller contracts, semantic 6x22 vertical-slice renderers, authoritative session service, sanitized Fastify routes, minimal numbered controller, presentation coordinator, loopback-only playable development composition, and SQLite persistence are implemented. Integration and real-browser tests cover HTTP → ordered memory-board delivery → display unlock, controller recovery, deterministic replay, idempotency, concurrency, exact layouts, and process-restart resume. The remaining acceptance item is exercising the owner-reviewed vertical path through the Cloud transport.
 
 Build:
 
