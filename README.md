@@ -8,7 +8,7 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-Implementation is underway. The deterministic board package and Flagship simulator are complete. The current transport slice adds an in-memory adapter, a server-only Cloud Read/Write adapter, and an ordered cadence queue that protects essential reveals. A locked, dry-run-first transition harness is ready for Digital and physical review, but no live board validation has been performed yet.
+Implementation is underway. Slices 0–2 are complete: the deterministic board package, Flagship simulator, server-only Cloud transport, and ordered cadence queue are merged. The signature initiative sequence has been validated on the owner's physical black-shell Flagship; Wave/Fast produced the accepted left-to-right roll reveal while preserving and restoring the owner's normal transition setting. Slice 3 is ready for owner review on `codex/game-kernel`: the deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, runnable private development composition, and SQLite restart durability are implemented. The reviewed vertical path still needs a Cloud/physical acceptance run before the slice closes.
 
 ## Run the Board Lab
 
@@ -20,7 +20,13 @@ npm ci
 npm run dev
 ```
 
-Then open [http://127.0.0.1:5173](http://127.0.0.1:5173). The Board Lab can switch between black and white Flagship shells, inspect fixture sequences, highlight changed cells, and expose the authoritative character-code arrays.
+Then open:
+
+- [Playable Board Lab](http://127.0.0.1:5173/?mode=play&shell=black) for the live private vertical slice and its minimal numbered controller.
+- [Flagship Board Lab](http://127.0.0.1:5173/) for static fixture sequences, shell colors, changed cells, and authoritative character-code arrays.
+- [Controller only](http://127.0.0.1:5173/?mode=controller) for the phone-sized input surface.
+
+The command starts both loopback services: Fastify on port 8787 and Vite on port 5173. No Vestaboard token is used; the playable lab renders the server's in-memory board transport while session state, presentation intents, and idempotency receipts persist in the ignored `.vestaquest/sessions.sqlite` file. Set `VESTAQUEST_DATABASE_PATH` to use another private database path.
 
 To run the complete local verification suite:
 
@@ -41,6 +47,8 @@ npm run transition:spike -- --fixture initiative
 ```
 
 This is always a dry run unless the explicit live gates are satisfied. The supported transition fixtures are title, choice marker, initiative, and HP loss. See [`docs/hardware/transition-spike.md`](./docs/hardware/transition-spike.md) before any Digital or physical test. Live credentials belong only in an ignored local `.env`; `.env.example` never contains tokens or satisfied write acknowledgements.
+
+Gate B selected Wave/Fast for opposed-roll reveals after physical testing. Classic changed only necessary cells but revealed the roll and verdict together; Wave/Gentle had the right order but was too slow. Local API column behavior remains an optional later experiment.
 
 ## What makes it a Vestaboard game
 

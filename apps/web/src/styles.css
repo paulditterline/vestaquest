@@ -100,6 +100,115 @@ main {
   text-transform: uppercase;
 }
 
+.controller-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 1rem;
+}
+
+.controller-card {
+  width: min(100%, 28rem);
+  padding: clamp(1.25rem, 5vw, 2rem);
+  background: rgba(24, 23, 21, 0.94);
+  border: 1px solid #504a40;
+  border-radius: 0.8rem;
+  box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.38);
+}
+
+.controller-card h1 {
+  margin: 0.25rem 0 1.5rem;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2.2rem, 12vw, 3.8rem);
+  font-weight: 500;
+}
+
+.controller-status {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 1rem 0;
+  border-block: 1px solid #39352f;
+}
+
+.controller-status div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.controller-status dt {
+  color: #9a9285;
+}
+
+.controller-status dd {
+  margin: 0;
+  color: #d9d0bf;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.controller-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 1.5rem;
+}
+
+.controller-choices button {
+  aspect-ratio: 1;
+  min-height: 4.5rem;
+  color: #111;
+  background: #e0d5be;
+  border-color: #e0d5be;
+  font-size: clamp(1.8rem, 12vw, 3rem);
+  font-weight: 800;
+}
+
+.controller-choices button:disabled {
+  cursor: wait;
+  opacity: 0.36;
+}
+
+.controller-recovery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.controller-new-game {
+  width: 100%;
+  margin-top: 1.5rem;
+}
+
+.play-lab {
+  width: min(100% - 2rem, 100rem);
+  padding-top: 2rem;
+}
+
+.play-lab__header h1 {
+  margin: 0.25rem 0 1.5rem;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2rem, 6vw, 4rem);
+  font-weight: 500;
+}
+
+.play-lab__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 21rem);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.play-lab__board {
+  min-width: 0;
+}
+
+.play-lab__controller .controller-card {
+  width: 100%;
+}
+
 .workbench {
   display: grid;
   grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
@@ -372,6 +481,10 @@ main {
 
   .controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .play-lab__workspace {
+    grid-template-columns: 1fr;
   }
 
   .controls > div:first-child,

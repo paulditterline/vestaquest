@@ -1,6 +1,6 @@
 # VestaQuest implementation plan
 
-Status: Slice 2 implementation; Gate B awaits Digital and physical validation
+Status: Slice 3 implementation; Gate B resolved with physical Wave/Fast validation
 
 Last updated: 2026-08-09
 
@@ -83,7 +83,21 @@ Why this shape: a long-running server suits authoritative sessions, credential c
 
 The stack is an engineering decision based on the platform constraints; the owner is not expected to choose framework plumbing. Slice 1 pins Node 22.23.1 for development/CI and TypeScript 6.0.x for compatibility with the current typed linting toolchain. Fastify and SQLite will be added only when the authoritative session slice needs them.
 
-### Gate B — signature physical transition, during the first hardware spike
+### Gate B — signature physical transition, resolved 2026-08-09
+
+Decision: use the Cloud API's `wave` transition at `fast` speed for opposed-roll scaffold/result sequences. The application must read the owner's current transition preference, apply Wave/Fast only for the reveal, and restore the original preference afterward.
+
+Physical findings:
+
+- Classic/Gentle kept unchanged cells still but introduced the roll tiles, result numbers, and verdict effectively together.
+- Wave/Gentle produced the intended left-to-right spatial order but felt too slow.
+- Wave/Fast preserved that order at an acceptable pace and was accepted by the owner for the current design.
+- Wave intentionally moves more flaps than Classic. The documented Cloud API does not offer a changed-cells-only, left-to-right hybrid.
+- Local API `column` remains worth testing later for per-message control, but it is not an MVP blocker and must not be assumed to preserve unchanged cells until physically verified.
+
+The physical Flagship was tested successfully through the Cloud API with Quiet Hours respected and the prior transition preference restored. Separate Digital Flagship validation remains useful for integration checks but is no longer a blocker for the transition-design decision.
+
+Original experiment definition:
 
 Prototype the two-state initiative reveal on:
 
@@ -178,7 +192,7 @@ Content can begin in `packages/game` as data modules. Extract a separate content
 
 - A run has a persisted seed. The seed plus ordered accepted commands must make outcomes reproducible.
 - The server is authoritative for random rolls. The browser never supplies results.
-- Each displayed choice has a stable choice ID and visible number. A command includes session ID, view/version ID, choice ID, and an idempotency key.
+- Each displayed choice has a stable choice ID and visible number. The controller command includes the session ID, expected view version, visible choice number, and an idempotency key; the authoritative session service maps that number to the current stable choice ID.
 - Input is accepted only for the current actionable view. Duplicate commands return the existing result; stale or simultaneous commands cannot advance the state twice.
 - Domain transitions emit semantic views and optional timing intent, never raw Vestaboard calls.
 - Counters such as rooms found, enemies slain, and cause of death update inside the same atomic transition as the underlying event.
@@ -330,6 +344,8 @@ Branch names describe anticipated slices. They may be split further if a PR beco
 
 ### Slice 0 — documentation baseline
 
+Status: **Complete**
+
 Branch: `codex/project-research`
 
 Artifacts: `AGENTS.md`, `PLAN.md`, `README.md`
@@ -344,6 +360,8 @@ Acceptance:
 After the root commit, establish `main` at this commit and create the first implementation branch.
 
 ### Slice 1 — simulator and renderer foundation
+
+Status: **Complete**
 
 Branch: `codex/simulator-foundation`
 
@@ -368,6 +386,8 @@ Acceptance:
 
 ### Slice 2 — transport queue and transition spike
 
+Status: **Complete**. Cloud/physical Gate B is resolved. Digital Flagship remains an optional integration check rather than a blocker.
+
 Branch: `codex/transport-transition-spike`
 
 Gate: B
@@ -385,14 +405,18 @@ Acceptance:
 
 - Automated queue tests prove no writes closer than the configured Cloud interval.
 - A failure/retry cannot reorder frames or re-run a roll.
-- The official Digital Flagship receives validated layouts.
+- The Cloud API accepts validated layouts through the production adapter; the physical Flagship receives the signature sequence. Digital Flagship remains an optional integration check.
 - The physical findings for the signature dice reveal are recorded and Gate B is resolved.
 
 Local API support can enter this slice if the board is already enabled; otherwise add it after private alpha behind the same transport contract.
 
 ### Slice 3 — vertical game kernel
 
+Status: **Ready for owner review**
+
 Branch: `codex/game-kernel`
+
+Current checkpoint: the deterministic kernel, versioned controller contracts, semantic 6x22 vertical-slice renderers, authoritative session service, sanitized Fastify routes, minimal numbered controller, presentation coordinator, loopback-only playable development composition, and SQLite persistence are implemented. Integration and real-browser tests cover HTTP → ordered memory-board delivery → display unlock, controller recovery, deterministic replay, idempotency, concurrency, exact layouts, and process-restart resume. The remaining acceptance item is exercising the owner-reviewed vertical path through the Cloud transport.
 
 Build:
 
