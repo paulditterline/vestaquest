@@ -5,6 +5,7 @@ import {
 } from '@vestaquest/contracts';
 import { renderGameView, toNumericRows } from '@vestaquest/board';
 import { deriveView } from '@vestaquest/game';
+import { MemoryBoardTransport } from '@vestaquest/transport';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_DEVELOPMENT_PORT,
@@ -69,6 +70,25 @@ describe('private development composition', () => {
       protocolVersion: 1,
       error: { code: 'session-not-found' },
     });
+  });
+
+  it('uses an injected board transport through the same presentation path', async () => {
+    const transport = new MemoryBoardTransport({
+      boardId: 'injected-acceptance-board',
+    });
+    const composition = createDevelopmentComposition({ transport });
+    compositions.push(composition);
+    const createdResponse = await composition.server.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      payload: { protocolVersion: 1 },
+    });
+    const created = CreateSessionResponseSchema.parse(createdResponse.json());
+    await waitUntilReady(composition, created.sessionId);
+
+    expect(composition.transport).toBe(transport);
+    expect(transport.boardId).toBe('injected-acceptance-board');
+    expect(transport.attempts).toHaveLength(2);
   });
 
   it('resumes a durable session with its stable simulated board after restart', async () => {

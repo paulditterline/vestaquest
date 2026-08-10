@@ -1,11 +1,19 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { renderGameView, toNumericRows } from '@vestaquest/board';
+import {
+  renderGameView,
+  toNumericRows,
+  type BoardShell,
+} from '@vestaquest/board';
 import {
   DevelopmentBoardProjectionSchema,
   PROTOCOL_VERSION,
   SessionIdSchema,
 } from '@vestaquest/contracts';
-import { BoardOutputQueue, MemoryBoardTransport } from '@vestaquest/transport';
+import {
+  BoardOutputQueue,
+  MemoryBoardTransport,
+  type BoardTransport,
+} from '@vestaquest/transport';
 import { deriveView } from '@vestaquest/game';
 import type { FastifyInstance } from 'fastify';
 import { buildHttpServer } from './http.js';
@@ -22,15 +30,22 @@ export const DEFAULT_DEVELOPMENT_PORT = 8787 as const;
 export type DevelopmentRepository = SessionRepository &
   Partial<Readonly<{ close: () => Promise<void> }>>;
 
-export type DevelopmentCompositionOptions = Readonly<{
+export type DevelopmentCompositionOptions<
+  Transport extends BoardTransport = MemoryBoardTransport,
+> = Readonly<{
   repository?: DevelopmentRepository;
+  transport?: Transport;
+  minimumWriteIntervalMs?: number;
+  shell?: BoardShell;
 }>;
 
-export type DevelopmentComposition = Readonly<{
+export type DevelopmentComposition<
+  Transport extends BoardTransport = MemoryBoardTransport,
+> = Readonly<{
   server: FastifyInstance;
   repository: DevelopmentRepository;
   sessionService: SessionService;
-  transport: MemoryBoardTransport;
+  transport: Transport;
   queue: BoardOutputQueue;
   coordinator: PresentationCoordinator;
   close: () => Promise<void>;
@@ -41,8 +56,15 @@ export type DevelopmentComposition = Readonly<{
  * transport, credentials, or non-loopback listener.
  */
 export function createDevelopmentComposition(
-  options: DevelopmentCompositionOptions = {},
-): DevelopmentComposition {
+  options?: DevelopmentCompositionOptions<MemoryBoardTransport>,
+): DevelopmentComposition<MemoryBoardTransport>;
+export function createDevelopmentComposition<Transport extends BoardTransport>(
+  options: DevelopmentCompositionOptions<Transport> &
+    Readonly<{ transport: Transport }>,
+): DevelopmentComposition<Transport>;
+export function createDevelopmentComposition(
+  options: DevelopmentCompositionOptions<BoardTransport> = {},
+): DevelopmentComposition<BoardTransport> {
   const repository: DevelopmentRepository =
     options.repository ?? new InMemorySessionRepository();
   const sessionService = new SessionService({
@@ -55,12 +77,18 @@ export function createDevelopmentComposition(
     },
     seeds: { nextSeed: randomUint32 },
   });
-  const transport = new MemoryBoardTransport({
-    boardId: 'private-development-board',
+  const transport =
+    options.transport ??
+    new MemoryBoardTransport({
+      boardId: 'private-development-board',
+    });
+  const queue = new BoardOutputQueue(transport, {
+    ...(options.minimumWriteIntervalMs === undefined
+      ? {}
+      : { minimumWriteIntervalMs: options.minimumWriteIntervalMs }),
   });
-  const queue = new BoardOutputQueue(transport);
   const coordinator = new PresentationCoordinator({
-    shell: 'black',
+    shell: options.shell ?? 'black',
     queue,
     service: sessionService,
     repository,
@@ -95,7 +123,9 @@ export function createDevelopmentComposition(
         (intent) => intent.status === 'pending',
       );
       const layout =
-        transport.attempts.length === 0 && !hasPendingPresentation
+        transport instanceof MemoryBoardTransport &&
+        transport.attempts.length === 0 &&
+        !hasPendingPresentation
           ? renderGameView(deriveView(stored.state))
           : current.layout;
       const projection = DevelopmentBoardProjectionSchema.parse({
