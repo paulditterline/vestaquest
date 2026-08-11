@@ -8,7 +8,7 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-Implementation is underway. Slices 0–2 are complete: the deterministic board package, Flagship simulator, server-only Cloud transport, and ordered cadence queue are merged. The signature initiative sequence has been validated on the owner's physical black-shell Flagship; Wave/Fast produced the accepted left-to-right roll reveal while preserving and restoring the owner's normal transition setting. Slice 3 is ready for owner review on `codex/game-kernel`: the deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, runnable private development composition, and SQLite restart durability are implemented. The reviewed vertical path still needs a Cloud/physical acceptance run before the slice closes.
+Implementation is underway. Slices 0–3 are complete. The project now has the deterministic board package, Flagship simulator, server-only Cloud transport, ordered cadence queue, deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, runnable private development composition, and SQLite restart durability. The signature initiative sequence and complete guarded controller-to-Cloud vertical path have both been accepted by the owner on the physical black-shell Flagship. The next step is the Gate C map-grammar conversation before Slice 4 map exploration begins.
 
 ## Run the Board Lab
 
@@ -37,6 +37,23 @@ npm run test:e2e
 ```
 
 The browser download is a one-time local setup step. None of these commands requires a Vestaboard token or network access to a board.
+
+### Deliberate live-board acceptance
+
+The ordinary development command above is unconditionally memory-only. After
+local checks pass, an explicitly gated physical acceptance session can use the
+same playable pipeline:
+
+```sh
+npm run dev:physical -- --shell black
+```
+
+This command requires the server-side token and both exact live-write
+acknowledgements in the ignored `.env`. It remains loopback-only, enforces the
+Cloud cadence, respects Quiet Hours, never forces a write, and does not change
+the owner's transition preference. Follow
+[`docs/hardware/private-playable-acceptance.md`](./docs/hardware/private-playable-acceptance.md)
+before running it.
 
 ## Transition spike
 
@@ -88,6 +105,7 @@ Each feature branch is tested locally before a PR. Critical layouts then graduat
 - [`PLAN.md`](./PLAN.md) — architecture, decision gates, delivery slices, test strategy, and branch/PR workflow.
 - [`AGENTS.md`](./AGENTS.md) — durable product requirements, verified Vestaboard constraints, API research, and project guardrails.
 - [`docs/architecture/transport-queue.md`](./docs/architecture/transport-queue.md) — ordering, cadence, retry, ambiguity, and Slice 3 durability boundaries.
+- [`docs/hardware/private-playable-acceptance.md`](./docs/hardware/private-playable-acceptance.md) — guarded Cloud/physical vertical-slice runbook and acceptance checklist.
 
 ## Repository workflow
 

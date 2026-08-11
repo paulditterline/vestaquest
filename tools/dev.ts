@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const children = [start('dev:server'), start('dev:web')];
+const serverArguments = process.argv.slice(2);
+const children = [start('dev:server', serverArguments), start('dev:web', [])];
 let shuttingDown = false;
 
 process.once('SIGINT', () => shutDown('SIGINT'));
@@ -17,11 +18,18 @@ for (const child of children) {
 
 await Promise.all(children.map(waitForExit));
 
-function start(script: 'dev:server' | 'dev:web'): ChildProcess {
-  return spawn(npmCommand, ['run', script], {
-    env: process.env,
-    stdio: 'inherit',
-  });
+function start(
+  script: 'dev:server' | 'dev:web',
+  arguments_: readonly string[],
+): ChildProcess {
+  return spawn(
+    npmCommand,
+    ['run', script, ...(arguments_.length ? ['--'] : []), ...arguments_],
+    {
+      env: process.env,
+      stdio: 'inherit',
+    },
+  );
 }
 
 function shutDown(signal: NodeJS.Signals): void {

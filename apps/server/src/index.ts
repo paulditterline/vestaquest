@@ -16,6 +16,15 @@ export type {
   DevelopmentCompositionOptions,
   DevelopmentRepository,
 } from './development.js';
+export {
+  LIVE_WRITE_ACKNOWLEDGEMENT,
+  PHYSICAL_WRITE_ACKNOWLEDGEMENT,
+  parseDevelopmentLaunch,
+} from './development-launch.js';
+export type {
+  DevelopmentLaunchConfig,
+  DevelopmentLaunchEnvironment,
+} from './development-launch.js';
 export { PresentationCoordinator } from './presentation-coordinator.js';
 export type {
   PresentationCoordinatorDependencies,

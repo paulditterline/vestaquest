@@ -14,6 +14,8 @@
     "build": "npm run build -w @vestaquest/game && npm run build -w @vestaquest/board && npm run build -w @vestaquest/contracts && npm run build -w @vestaquest/transport && npm run build -w @vestaquest/server && npm run build -w @vestaquest/web",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
     "dev": "node --import tsx tools/dev.ts",
+    "dev:digital": "node --env-file-if-exists=.env --import tsx tools/dev.ts --live --target digital",
+    "dev:physical": "node --env-file-if-exists=.env --import tsx tools/dev.ts --live --target physical",
     "dev:server": "npm run dev -w @vestaquest/server --",
     "dev:web": "npm run dev -w @vestaquest/web -- --host 127.0.0.1",
     "format": "prettier --write .",
