@@ -1,5 +1,7 @@
 import {
   renderGameView,
+  renderOpposedRollResult,
+  renderOpposedRollScaffold,
   renderTitlePresentation,
   type BoardShell,
   type FlagshipLayout,
@@ -8,6 +10,8 @@ import {
   type BoardOutputQueue,
   type DeliveryHandle,
   type DeliveryOutcome,
+  type TransitionPreference,
+  type TransitionPreferenceTransport,
 } from '@vestaquest/transport';
 import type { SessionId } from '@vestaquest/contracts';
 import type { SessionRepository } from './repository.js';
@@ -20,6 +24,7 @@ import type { PresentationIntent } from './types.js';
 export type PresentationCoordinatorDependencies = Readonly<{
   shell: BoardShell;
   queue: BoardOutputQueue;
+  transitionTransport?: TransitionPreferenceTransport;
   service: SessionService;
   repository: SessionRepository;
 }>;
@@ -37,6 +42,7 @@ export type PresentationDispatchResult = Readonly<{
 export class PresentationCoordinator {
   readonly #shell: BoardShell;
   readonly #queue: BoardOutputQueue;
+  readonly #transitionTransport: TransitionPreferenceTransport | undefined;
   readonly #service: SessionService;
   readonly #repository: SessionRepository;
   readonly #active = new Map<SessionId, Promise<PresentationDispatchResult>>();
@@ -44,6 +50,7 @@ export class PresentationCoordinator {
   public constructor(dependencies: PresentationCoordinatorDependencies) {
     this.#shell = dependencies.shell;
     this.#queue = dependencies.queue;
+    this.#transitionTransport = dependencies.transitionTransport;
     this.#service = dependencies.service;
     this.#repository = dependencies.repository;
   }
@@ -74,12 +81,7 @@ export class PresentationCoordinator {
 
     const deliveredIntentIds: string[] = [];
     for (const intent of intents) {
-      const handle = this.#queue.enqueue({
-        id: intent.id,
-        layout: this.#render(intent),
-        delivery: { kind: 'essential' },
-      });
-      const outcome = await this.#waitForOutcome(handle);
+      const outcome = await this.#deliver(intent);
       if (!outcome || outcome.status !== 'delivered') {
         await this.#service.markDisplayBlocked(sessionId, intent.viewVersion);
         return Object.freeze({
@@ -100,10 +102,57 @@ export class PresentationCoordinator {
     });
   }
 
+  async #deliver(
+    intent: PresentationIntent,
+  ): Promise<DeliveryOutcome | undefined> {
+    const preferred: TransitionPreference = Object.freeze({
+      transition: 'wave',
+      transitionSpeed: 'fast',
+    });
+    let original: TransitionPreference | undefined;
+    let changed = false;
+    let outcome: DeliveryOutcome | undefined;
+    try {
+      if (intent.payload.kind === 'roll-result' && this.#transitionTransport) {
+        original = await this.#transitionTransport.getTransition();
+        changed =
+          original.transition !== preferred.transition ||
+          original.transitionSpeed !== preferred.transitionSpeed;
+        if (changed) {
+          await this.#transitionTransport.setTransition(preferred);
+        }
+      }
+      const handle = this.#queue.enqueue({
+        id: intent.id,
+        layout: this.#render(intent),
+        delivery: { kind: 'essential' },
+      });
+      outcome = await this.#waitForOutcome(handle);
+    } catch {
+      outcome = undefined;
+    }
+    if (changed && original && this.#transitionTransport) {
+      try {
+        await this.#transitionTransport.setTransition(original);
+      } catch {
+        // Block the display rather than silently changing the owner's setting.
+        outcome = undefined;
+      }
+    }
+    return outcome;
+  }
+
   #render(intent: PresentationIntent): FlagshipLayout {
     switch (intent.payload.kind) {
       case 'title':
         return renderTitlePresentation(
+          intent.payload.presentation,
+          this.#shell,
+        );
+      case 'roll-scaffold':
+        return renderOpposedRollScaffold(intent.payload.presentation);
+      case 'roll-result':
+        return renderOpposedRollResult(
           intent.payload.presentation,
           this.#shell,
         );

@@ -44,6 +44,8 @@ export type MapPrototypeView = Readonly<{
   luck: number;
   roomsFound: number;
   directions: readonly MapDirection[];
+  heldItem?: 'HEAL' | null;
+  canUseItem?: boolean;
   grid: MapPrototypeGrid;
 }>;
 
@@ -85,11 +87,15 @@ export function renderMapPrototype(
     column: 0,
     width: 11,
   });
-  layout = writeText(layout, `ROOMS ${view.roomsFound}`, {
-    row: 4,
-    column: 0,
-    width: 11,
-  });
+  layout = writeText(
+    layout,
+    `RM${view.roomsFound} ITEM:${view.heldItem === null ? '-' : (view.heldItem?.slice(0, 1) ?? '-')}`,
+    {
+      row: 4,
+      column: 0,
+      width: 11,
+    },
+  );
   layout = writeText(layout, 'MAP', {
     row: 0,
     column: MAP_COLUMN,
@@ -111,13 +117,13 @@ export function renderMapPrototype(
     ),
   );
 
-  return writeText(
-    layout,
-    view.directions
-      .map((direction, index) => `${index + 1}${direction}`)
-      .join(' '),
-    { row: 5, column: 0, width: 11 },
+  const directionChoices = view.directions.map(
+    (direction, index) => `${index + 1}${direction}`,
   );
+  const choiceText = view.canUseItem
+    ? `${directionChoices.join('')}${directionChoices.length + 1}I`
+    : directionChoices.join(' ');
+  return writeText(layout, choiceText, { row: 5, column: 0, width: 11 });
 }
 
 function mapCellPair(
@@ -179,6 +185,9 @@ function validateView(view: MapPrototypeView): void {
     throw new RangeError(
       'Map prototype requires from one through four directions.',
     );
+  }
+  if (view.canUseItem && view.heldItem === null) {
+    throw new RangeError('A usable map item requires a held item.');
   }
   if (new Set(view.directions).size !== view.directions.length) {
     throw new RangeError('Map prototype directions must be unique.');

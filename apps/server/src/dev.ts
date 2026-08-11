@@ -11,6 +11,10 @@ import { SqliteSessionRepository } from './sqlite-repository.js';
 import { CloudBoardTransport } from '@vestaquest/transport';
 
 const projectRoot = fileURLToPath(new URL('../../../', import.meta.url));
+// The play lab polls once per second. Keep transient memory-board frames visible
+// long enough for the browser to observe them; Cloud cadence is configured
+// separately and remains at least 15 seconds.
+const MEMORY_PRESENTATION_INTERVAL_MS = 1_250;
 const configuredDatabasePath = process.env.VESTAQUEST_DATABASE_PATH?.trim();
 const databasePath = resolve(
   projectRoot,
@@ -23,7 +27,10 @@ const launch = parseDevelopmentLaunch(process.argv.slice(2), process.env);
 const repository = new SqliteSessionRepository(databasePath);
 const composition =
   launch.kind === 'memory'
-    ? createDevelopmentComposition({ repository })
+    ? createDevelopmentComposition({
+        repository,
+        minimumWriteIntervalMs: MEMORY_PRESENTATION_INTERVAL_MS,
+      })
     : createDevelopmentComposition({
         repository,
         transport: new CloudBoardTransport({

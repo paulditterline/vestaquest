@@ -62,6 +62,16 @@ export interface TransitionPreferenceTransport extends BoardTransport {
   ): Promise<TransitionPreference>;
 }
 
+export function supportsTransitionPreferences(
+  transport: BoardTransport,
+): transport is TransitionPreferenceTransport {
+  const candidate = transport as Partial<TransitionPreferenceTransport>;
+  return (
+    typeof candidate.getTransition === 'function' &&
+    typeof candidate.setTransition === 'function'
+  );
+}
+
 export function isCloudTransition(value: unknown): value is CloudTransition {
   return (
     typeof value === 'string' &&

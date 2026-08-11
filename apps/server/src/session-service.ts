@@ -194,20 +194,40 @@ export class SessionService {
         }
         outcome = 'accepted';
         const nextSequence = current.nextPresentationSequence;
+        const transientIntents = applied.presentations.flatMap(
+          (presentation, index) => [
+            this.#intent(
+              current.sessionId,
+              applied.state.revision,
+              nextSequence + index * 2,
+              false,
+              { kind: 'roll-scaffold', presentation },
+            ),
+            this.#intent(
+              current.sessionId,
+              applied.state.revision,
+              nextSequence + index * 2 + 1,
+              false,
+              { kind: 'roll-result', presentation },
+            ),
+          ],
+        );
+        const stableSequence = nextSequence + transientIntents.length;
         const nextSession: StoredSession = Object.freeze({
           ...current,
           state: applied.state,
           displayStatus: 'locked',
-          nextPresentationSequence: nextSequence + 1,
+          nextPresentationSequence: stableSequence + 1,
           updatedAtMs: this.#clock.now(),
         });
         transition = Object.freeze({
           session: nextSession,
           presentationIntents: Object.freeze([
+            ...transientIntents,
             this.#intent(
               current.sessionId,
               applied.state.revision,
-              nextSequence,
+              stableSequence,
               true,
               { kind: 'game-view', view: applied.view },
             ),

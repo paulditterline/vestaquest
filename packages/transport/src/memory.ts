@@ -17,6 +17,7 @@ import type {
 export type MemorySendAttempt = Readonly<{
   layout: FlagshipLayout;
   sequence: number;
+  transition: TransitionPreference;
 }>;
 
 export type MemoryTransportOptions = Readonly<{
@@ -74,6 +75,7 @@ export class MemoryBoardTransport
     const attempt = Object.freeze({
       layout: validated,
       sequence: this.attempts.length + 1,
+      transition: Object.freeze({ ...this.#transition }),
     });
     this.attempts.push(attempt);
     await this.#onSend?.(attempt, options);

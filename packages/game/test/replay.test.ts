@@ -69,7 +69,7 @@ describe('accepted-command replay', () => {
       },
     });
     expect(replayed.revision).toBe(2);
-    expect(replayed.rng.draws).toBe(2);
+    expect(replayed.rng.draws).toBe(6);
   });
 
   it('detects metadata tampering, missing history, and a different seed', () => {

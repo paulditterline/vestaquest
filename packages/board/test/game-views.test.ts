@@ -5,12 +5,15 @@ import {
   deriveTitlePresentation,
   deriveView,
   type GameView,
+  type GamePresentation,
   type RunState,
 } from '@vestaquest/game';
 import { describe, expect, it } from 'vitest';
 import {
   isFlagshipLayout,
   renderGameView,
+  renderOpposedRollResult,
+  renderOpposedRollScaffold,
   renderTitlePresentation,
   snapshotLayout,
 } from '../src/index.js';
@@ -47,12 +50,58 @@ describe('semantic game-view renderers', () => {
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 
+  it('renders the live combat menu with both HP bars and legal actions', () => {
+    let state = choose(createRun(10), CHOICE_IDS.warrior, 'select-warrior');
+    state = choose(state, CHOICE_IDS.north, 'north');
+    state = choose(state, CHOICE_IDS.north, 'north-again');
+    state = choose(state, CHOICE_IDS.east, 'enter-fight');
+    const view = deriveView(state);
+    expect(view.kind).toBe('combat');
+    for (const shell of ['black', 'white'] as const) {
+      const layout = renderGameView(view, shell);
+      expect(isFlagshipLayout(layout)).toBe(true);
+      expect(snapshotLayout(layout)).toMatchSnapshot();
+    }
+  });
+
   it('renders the provisional exit outcome after the hidden room is found', () => {
     const view = escapeView();
     expect(view.kind).toBe('victory');
     const layout = renderGameView(view);
     expect(isFlagshipLayout(layout)).toBe(true);
     expect(snapshotLayout(layout)).toMatchSnapshot();
+  });
+
+  it('renders actual opposed-roll scaffolds and results on both shells', () => {
+    const presentation: GamePresentation = {
+      kind: 'opposed-roll',
+      purpose: 'initiative',
+      left: {
+        name: 'WIZARD',
+        diceLabel: 'D6',
+        dice: [4],
+        modifierStat: 'S',
+        modifier: 3,
+        total: 7,
+      },
+      right: {
+        name: 'SKELETON KNIGHT',
+        diceLabel: 'D6',
+        dice: [5],
+        modifierStat: 'S',
+        modifier: 2,
+        total: 7,
+      },
+      verdict: 'FIRST: WIZARD',
+    };
+    expect(
+      snapshotLayout(renderOpposedRollScaffold(presentation)),
+    ).toMatchSnapshot();
+    for (const shell of ['black', 'white'] as const) {
+      expect(
+        snapshotLayout(renderOpposedRollResult(presentation, shell)),
+      ).toMatchSnapshot();
+    }
   });
 });
 
@@ -68,6 +117,13 @@ function escapeView(): GameView {
     CHOICE_IDS.east,
   ]) {
     state = choose(state, direction, `move-${state.revision}`);
+    while (state.phase.kind === 'combat') {
+      const view = deriveView(state);
+      const action =
+        view.choices.find((choice) => choice.id === CHOICE_IDS.smash)?.id ??
+        CHOICE_IDS.attack;
+      state = choose(state, action, `fight-${state.revision}`);
+    }
   }
   return deriveView(state);
 }

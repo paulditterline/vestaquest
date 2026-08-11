@@ -1,8 +1,8 @@
 # VestaQuest implementation plan
 
-Status: Slice 4 implemented and owner-playtested; awaiting merge
+Status: Slices 0–4 complete; Slice 5 core combat in progress
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 
 Target hardware: Vestaboard Flagship, 6 rows by 22 columns
 
@@ -141,15 +141,38 @@ These decisions were reviewed in the exact 6x22 Board Lab on a black-shell prese
 
 ### Gate D — first balance model, before the complete combat slice
 
+Confirmed on 2026-08-11: ordinary attacks oppose `D6 + POWER` against
+`D6 + DEFENSE`; a tie blocks; a win deals 1 HP; a margin of 3+ deals 2 HP;
+and damage is capped at 2 HP. Target roughly two successful player hits and
+two to three rounds for an ordinary enemy. Warrior Smash remains a once-per-
+enemy `2D6` keep-high attack. Maximum HP is five. Level 1 values are Warrior
+`HP5 P5 D4 S2 L2`, Rogue `HP4 P3 D3 S5 L5`, and Wizard `HP3 P5 D2 S3 L4`.
+The hero automatically reaches Level 2 at four unique rooms and Level 3 at
+seven, restoring 1 HP per level. Warrior grows Power then Defense; Rogue grows
+maximum/current HP then Skill; Wizard grows maximum/current HP then Power.
+Run is an opposed `D6 + SKILL` contest. Success retreats to the room from which
+the hero entered while preserving the enemy's HP and active-threat marker;
+failure consumes the hero's turn before the normal enemy action.
+Initiative is rolled once per combat as opposed `D6 + SKILL`, with raw dice and
+modified totals shown; ties go to the player. An enemy that wins acts before the
+first menu, and re-entering an undefeated threat rerolls initiative.
+The first approved enemies are Ghoul (`HP2 P3 D2 S3`, with a 2-damage hit
+restoring 1 HP) and Skeleton Knight (`HP3 P4 D4 S2`, relying on armor rather
+than an additional special rule). Late-dungeon elites are Fire Demon
+(`HP3 P5 D3 S4`; Fireball heals, weak to Lightning) and Ice Demon
+(`HP3 P4 D4 S2`; weak to Fireball, resists Lightning). Stun affects both
+normally. Lost Soul remains a later Gate E design.
+The Wizard has a three-slot scroll pouch starting with Fireball, Lightning, and
+Stun. Every class starts with a one-slot Healing Draught restoring 2 HP. It may
+be used as a turn in combat or as a context-sensitive map choice with no enemy
+action; the map HUD identifies the held item. Standard found weapons and armor
+grant `+1 POWER` and `+1 DEFENSE`, with no initial `+2` gear. Unaware grants
+Rogue Steal `+1`; Run has no modifier beyond the opposed Skill totals.
+
 Decide initial values in data/configuration rather than hard-coded branches:
 
-- class starting stats and automatic growth curves;
-- advancement trigger and number of levels in a typical ten-room run;
-- initiative tie rule and any modifiers;
-- attack/defense margin-to-damage rule and damage cap;
-- player/enemy HP scale that remains legible as a tile bar;
-- scroll capacity and starting scrolls;
-- consumable strength, equipment ranges, and Run/Steal bonuses.
+Gate D is resolved. Treat these numbers as data-driven playtest hypotheses, not
+permanent balance guarantees.
 
 The first values are hypotheses. Automated seed runs and physical play sessions should tune them without changing engine code.
 
@@ -445,6 +468,8 @@ Acceptance:
 
 ### Slice 4 — map exploration
 
+Status: **Complete**. Merged after owner playtesting on 2026-08-10.
+
 Branch: `codex/map-exploration`
 
 Gate: C
@@ -466,6 +491,8 @@ Acceptance:
 
 ### Slice 5 — core combat and death
 
+Status: **In progress**. Gate D is resolved; owner visual/physical review remains.
+
 Branch: `codex/core-combat`
 
 Gate: D
@@ -475,7 +502,8 @@ Build:
 - Initiative, attack/defense, margin damage/cap, enemy turns, Run, HP bars, and death.
 - Warrior Smash as the first class action.
 - Ghoul and Skeleton Knight as the first enemies.
-- Full-board combat introduction art prototypes.
+- Record the required full-board combat introduction art beat; finalize its
+  visual design with the other pixel-art interstitials in Slice 8.
 - Opposed-roll scaffold/result sequencing using the transition decision from Gate B.
 - Six-row death epitaph and exact statistics.
 
@@ -537,6 +565,8 @@ Build:
 - Fire/Ice Demons and finalized initial enemy behaviors.
 - Lost Soul behavior approved at Gate E.
 - Full initial item, scroll, event, enemy-art, victory, and copy set.
+- Finalize the three required pixel-art interstitial families after reviewing
+  Vestaboard examples: selected hero, pre-fight enemy, and victory exit door.
 - Complete run pacing near the ten-location target.
 
 Acceptance:
@@ -616,10 +646,10 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Merge Slice 4's ten authored maps, hidden-exit selection, persistent map
-   memory, topology invariants, and exact golden layouts.
-2. Resolve Gate D's remaining combat values, then implement Slice 5 on
+1. Complete and physically review Slice 5 core combat, opposed-roll
+   presentation, and death on
    `codex/core-combat`.
+2. Begin Slice 6 class actions, equipment, and progression after Slice 5 merges.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed

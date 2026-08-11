@@ -30,7 +30,11 @@ async function databasePath() {
   return join(directory, 'sessions.sqlite');
 }
 
-function serviceFor(repository: SqliteSessionRepository, prefix: string) {
+function serviceFor(
+  repository: SqliteSessionRepository,
+  prefix: string,
+  seed = 1,
+) {
   let id = 0;
   let now = 1_000;
   const ids: SessionIdFactory = {
@@ -42,7 +46,7 @@ function serviceFor(repository: SqliteSessionRepository, prefix: string) {
     repository,
     ids,
     clock: { now: () => now++ },
-    seeds: { nextSeed: () => 1 },
+    seeds: { nextSeed: () => seed },
   });
 }
 
@@ -95,6 +99,46 @@ describe('SqliteSessionRepository', () => {
       { sequence: 2, status: 'pending', kind: 'game-view' },
     ]);
     await restartedRepository.close();
+  });
+
+  it('persists semantic opposed-roll intents across restart', async () => {
+    const path = await databasePath();
+    const repository = new SqliteSessionRepository(path);
+    const service = serviceFor(repository, 'rolls', 10);
+    const created = await service.createSession();
+    await service.acknowledgeDisplayed(created.sessionId, 0);
+
+    for (const [key, choice] of [
+      ['class', 1],
+      ['north', 1],
+      ['north-again', 1],
+      ['enter-fight', 2],
+    ] as const) {
+      const current = await service.getSession(created.sessionId);
+      await service.acknowledgeDisplayed(
+        created.sessionId,
+        current.view.version,
+      );
+      await service.submitCommand(
+        command(created.sessionId, key, current.view.version, choice),
+      );
+    }
+    await repository.close();
+
+    const restarted = new SqliteSessionRepository(path);
+    const intents = await restarted.listPresentationIntents(created.sessionId);
+    expect(intents.slice(-5).map(({ payload }) => payload.kind)).toEqual([
+      'roll-scaffold',
+      'roll-result',
+      'roll-scaffold',
+      'roll-result',
+      'game-view',
+    ]);
+    expect(intents.at(-4)?.payload).toMatchObject({
+      kind: 'roll-result',
+      presentation: { purpose: 'initiative', verdict: 'FIRST: GHOUL' },
+    });
+    await restarted.close();
   });
 
   it('returns the original idempotency receipt after restart', async () => {

@@ -7,7 +7,11 @@ import {
   CommandSessionRequestSchema,
   type SessionId,
 } from '@vestaquest/contracts';
-import { deriveTitlePresentation, deriveView } from '@vestaquest/game';
+import {
+  CHOICE_IDS,
+  deriveTitlePresentation,
+  deriveView,
+} from '@vestaquest/game';
 import {
   BoardOutputQueue,
   MemoryBoardTransport,
@@ -22,7 +26,7 @@ import {
   type SessionIdFactory,
 } from '../src/index.js';
 
-function createHarness(onSend?: MemoryTransportOptions['onSend']) {
+function createHarness(onSend?: MemoryTransportOptions['onSend'], seed = 1) {
   let id = 0;
   let now = 1_000;
   const ids: SessionIdFactory = {
@@ -35,7 +39,7 @@ function createHarness(onSend?: MemoryTransportOptions['onSend']) {
     repository,
     ids,
     clock: { now: () => now++ },
-    seeds: { nextSeed: () => 1 },
+    seeds: { nextSeed: () => seed },
   });
   const transport = new MemoryBoardTransport(onSend ? { onSend } : {});
   const queue = new BoardOutputQueue(transport, {
@@ -45,6 +49,7 @@ function createHarness(onSend?: MemoryTransportOptions['onSend']) {
   const coordinator = new PresentationCoordinator({
     shell: 'black',
     queue,
+    transitionTransport: transport,
     service,
     repository,
   });
@@ -138,6 +143,50 @@ describe('PresentationCoordinator', () => {
     expect((await service.getSession(created.sessionId)).view.display).toEqual({
       status: 'ready',
       legalChoices: [1, 2],
+    });
+  });
+
+  it('delivers opposed rolls in order with Wave/Fast only on result frames', async () => {
+    const { coordinator, repository, service, transport } = createHarness(
+      undefined,
+      10,
+    );
+    const created = await service.createSession();
+    await coordinator.dispatch(created.sessionId);
+
+    for (const [key, choiceId] of [
+      ['class', CHOICE_IDS.warrior],
+      ['north', CHOICE_IDS.north],
+      ['north-again', CHOICE_IDS.north],
+      ['enter-fight', CHOICE_IDS.east],
+    ] as const) {
+      const stored = await repository.get(created.sessionId);
+      if (!stored) throw new Error('Missing session.');
+      const view = deriveView(stored.state);
+      const choice = view.choices.find(({ id }) => id === choiceId)?.number;
+      if (!choice) throw new Error(`Missing choice ${choiceId}.`);
+      await service.submitCommand(
+        command(created.sessionId, key, stored.state.revision, choice),
+      );
+      await coordinator.dispatch(created.sessionId);
+    }
+
+    expect(
+      transport.attempts.slice(-5).map(({ transition }) => transition),
+    ).toEqual([
+      { transition: 'classic', transitionSpeed: 'gentle' },
+      { transition: 'wave', transitionSpeed: 'fast' },
+      { transition: 'classic', transitionSpeed: 'gentle' },
+      { transition: 'wave', transitionSpeed: 'fast' },
+      { transition: 'classic', transitionSpeed: 'gentle' },
+    ]);
+    await expect(transport.getTransition()).resolves.toEqual({
+      transition: 'classic',
+      transitionSpeed: 'gentle',
+    });
+    expect((await service.getSession(created.sessionId)).view.display).toEqual({
+      status: 'ready',
+      legalChoices: [1, 2, 3],
     });
   });
 

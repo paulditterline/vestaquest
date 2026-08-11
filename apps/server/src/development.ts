@@ -12,6 +12,7 @@ import {
 import {
   BoardOutputQueue,
   MemoryBoardTransport,
+  supportsTransitionPreferences,
   type BoardTransport,
 } from '@vestaquest/transport';
 import { deriveView } from '@vestaquest/game';
@@ -90,6 +91,9 @@ export function createDevelopmentComposition(
   const coordinator = new PresentationCoordinator({
     shell: options.shell ?? 'black',
     queue,
+    ...(supportsTransitionPreferences(transport)
+      ? { transitionTransport: transport }
+      : {}),
     service: sessionService,
     repository,
   });
