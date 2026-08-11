@@ -8,6 +8,18 @@ export {
 } from './game.js';
 export { RNG_VERSION, createRng, nextUint32, rollDie } from './rng.js';
 export {
+  AUTHORED_TOPOLOGIES,
+  CROOKED_HALLS,
+  DIRECTIONS,
+  MAP_SIZE,
+  getRoom,
+  getTopology,
+  positionKey,
+  selectDungeon,
+  shortestRoomDistance,
+  validateTopology,
+} from './topology.js';
+export {
   CHOICE_IDS,
   GAME_RULES_VERSION,
   GAME_STATE_VERSION,
@@ -24,12 +36,16 @@ export type {
   CommandRejectionReason,
   DeathPhase,
   DeathView,
+  DungeonRunState,
+  ExplorationPhase,
+  ExplorationView,
   GameChoice,
   GameCommand,
   GameView,
   HeroClass,
-  PlaceholderRoomPhase,
-  PlaceholderRoomView,
+  MapCellViewState,
+  MapViewGrid,
+  MapViewRow,
   RejectedCommandResult,
   RunPhase,
   RunState,
@@ -38,3 +54,12 @@ export type {
   VictoryView,
 } from './types.js';
 export type { RngDraw, RngState, RngVersion } from './rng.js';
+export type {
+  Direction,
+  DungeonRoom,
+  DungeonTopology,
+  GridPosition,
+  RoomConnection,
+  RoomId,
+  SelectedDungeon,
+} from './topology.js';

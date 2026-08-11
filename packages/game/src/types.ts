@@ -1,7 +1,8 @@
 import type { RngState } from './rng.js';
+import type { Direction, RoomId } from './topology.js';
 
-export const GAME_STATE_VERSION = 1 as const;
-export const GAME_RULES_VERSION = 'vertical-slice-v1' as const;
+export const GAME_STATE_VERSION = 2 as const;
+export const GAME_RULES_VERSION = 'map-exploration-v1' as const;
 
 export const HERO_CLASSES = ['warrior', 'rogue', 'wizard'] as const;
 export type HeroClass = (typeof HERO_CLASSES)[number];
@@ -10,7 +11,10 @@ export const CHOICE_IDS = {
   warrior: 'class.warrior',
   rogue: 'class.rogue',
   wizard: 'class.wizard',
-  enterDarkness: 'placeholder.enter-darkness',
+  north: 'move.north',
+  east: 'move.east',
+  south: 'move.south',
+  west: 'move.west',
 } as const;
 
 export type ChoiceId = (typeof CHOICE_IDS)[keyof typeof CHOICE_IDS];
@@ -28,15 +32,24 @@ export interface ClassSelectPhase {
   readonly kind: 'class-select';
 }
 
-export interface PlaceholderRoomPhase {
-  readonly kind: 'placeholder-room';
+export interface DungeonRunState {
+  readonly topologyId: string;
+  readonly exitRoomId: RoomId;
+  readonly currentRoomId: RoomId;
+  readonly visitedRoomIds: readonly RoomId[];
+  readonly revealedDeadEndPositions: readonly string[];
+}
+
+export interface ExplorationPhase {
+  readonly kind: 'exploration';
   readonly heroClass: HeroClass;
+  readonly dungeon: DungeonRunState;
 }
 
 export interface VictoryPhase {
   readonly kind: 'victory';
   readonly heroClass: HeroClass;
-  readonly provisionalRoll: number;
+  readonly roomsFound: number;
 }
 
 export interface DeathPhase {
@@ -47,7 +60,7 @@ export interface DeathPhase {
 }
 
 export type RunPhase =
-  ClassSelectPhase | PlaceholderRoomPhase | VictoryPhase | DeathPhase;
+  ClassSelectPhase | ExplorationPhase | VictoryPhase | DeathPhase;
 
 export interface AcceptedCommandEntry {
   readonly sequence: number;
@@ -89,18 +102,51 @@ export interface ClassSelectView extends BaseGameView {
   readonly prompt: 'CHOOSE YOUR CLASS';
 }
 
-export interface PlaceholderRoomView extends BaseGameView {
-  readonly kind: 'placeholder-room';
+export type MapCellViewState =
+  | 'unexplored'
+  | 'frontier'
+  | 'explored'
+  | 'current'
+  | 'active-encounter'
+  | 'resolved-encounter'
+  | 'dead-end';
+
+export type MapViewRow = readonly [
+  MapCellViewState,
+  MapCellViewState,
+  MapCellViewState,
+  MapCellViewState,
+  MapCellViewState,
+];
+
+export type MapViewGrid = readonly [
+  MapViewRow,
+  MapViewRow,
+  MapViewRow,
+  MapViewRow,
+  MapViewRow,
+];
+
+export interface ExplorationView extends BaseGameView {
+  readonly kind: 'exploration';
   readonly heroClass: HeroClass;
-  readonly heading: 'A DARK DOOR';
-  readonly body: 'SOMETHING WAITS BEYOND';
+  readonly level: number;
+  readonly hp: number;
+  readonly maximumHp: number;
+  readonly power: number;
+  readonly defense: number;
+  readonly skill: number;
+  readonly luck: number;
+  readonly roomsFound: number;
+  readonly directions: readonly Direction[];
+  readonly grid: MapViewGrid;
 }
 
 export interface VictoryView extends BaseGameView {
   readonly kind: 'victory';
   readonly heroClass: HeroClass;
   readonly heading: 'YOU ESCAPED';
-  readonly provisionalRoll: number;
+  readonly roomsFound: number;
 }
 
 export interface DeathView extends BaseGameView {
@@ -112,7 +158,7 @@ export interface DeathView extends BaseGameView {
 }
 
 export type GameView =
-  ClassSelectView | PlaceholderRoomView | VictoryView | DeathView;
+  ClassSelectView | ExplorationView | VictoryView | DeathView;
 
 export type CommandRejectionReason =
   | 'duplicate-command'

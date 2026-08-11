@@ -191,9 +191,9 @@ export function renderDeath(summary: DeathSummary): FlagshipLayout {
 }
 
 const provisionalClasses: readonly ClassSummary[] = Object.freeze([
-  { name: 'WARRIOR', hp: 8, power: 5, defense: 5, skill: 2, luck: 2 },
-  { name: 'ROGUE', hp: 6, power: 3, defense: 3, skill: 5, luck: 5 },
-  { name: 'WIZARD', hp: 4, power: 5, defense: 2, skill: 3, luck: 4 },
+  { name: 'WARRIOR', hp: 5, power: 5, defense: 4, skill: 2, luck: 2 },
+  { name: 'ROGUE', hp: 4, power: 3, defense: 3, skill: 5, luck: 5 },
+  { name: 'WIZARD', hp: 3, power: 5, defense: 2, skill: 3, luck: 4 },
 ]);
 
 const U = 'unexplored' as const;

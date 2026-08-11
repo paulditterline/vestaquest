@@ -1,14 +1,15 @@
 import type {
   ClassSelectView,
   DeathView,
+  ExplorationView,
   GameChoice,
   GameView,
   HeroClass,
-  PlaceholderRoomView,
   TitlePresentation,
   VictoryView,
 } from '@vestaquest/game';
 import { createFlagshipLayout, type FlagshipLayout } from './layout.js';
+import { renderMapPrototype } from './map-prototypes.js';
 import { writeText } from './primitives.js';
 import { renderTitle, type BoardShell } from './screens.js';
 
@@ -17,9 +18,9 @@ import { renderTitle, type BoardShell } from './screens.js';
  * balance decisions and must be replaced after the relevant design gate.
  */
 const PROVISIONAL_CLASS_STATS = Object.freeze({
-  warrior: Object.freeze({ hp: 8, power: 5, defense: 5, skill: 2, luck: 2 }),
-  rogue: Object.freeze({ hp: 6, power: 3, defense: 3, skill: 5, luck: 5 }),
-  wizard: Object.freeze({ hp: 4, power: 5, defense: 2, skill: 3, luck: 4 }),
+  warrior: Object.freeze({ hp: 5, power: 5, defense: 4, skill: 2, luck: 2 }),
+  rogue: Object.freeze({ hp: 4, power: 3, defense: 3, skill: 5, luck: 5 }),
+  wizard: Object.freeze({ hp: 3, power: 5, defense: 2, skill: 3, luck: 4 }),
 });
 
 export function renderTitlePresentation(
@@ -54,28 +55,29 @@ export function renderClassSelectView(view: ClassSelectView): FlagshipLayout {
   return writeText(layout, 'PROVISIONAL VALUES', { row: 5, column: 2 });
 }
 
-export function renderPlaceholderRoomView(
-  view: PlaceholderRoomView,
+export function renderExplorationView(
+  view: ExplorationView,
+  shell: BoardShell,
 ): FlagshipLayout {
-  const choices = requireNumberedChoices(view.choices, 1);
-  const choice = choices[0]!;
-  let layout = writeText(createFlagshipLayout(), view.heading, {
-    row: 0,
-    column: 0,
-    width: 22,
-    align: 'center',
+  const choices = requireNumberedChoices(view.choices, view.directions.length);
+  if (
+    choices.some((choice, index) => choice.label !== view.directions[index])
+  ) {
+    throw new TypeError('Exploration choices must match displayed directions.');
+  }
+  return renderMapPrototype(shell, {
+    heroClass: classLabel(view.heroClass),
+    level: view.level,
+    hp: view.hp,
+    maximumHp: view.maximumHp,
+    power: view.power,
+    defense: view.defense,
+    skill: view.skill,
+    luck: view.luck,
+    roomsFound: view.roomsFound,
+    directions: view.directions,
+    grid: view.grid,
   });
-  layout = writeText(layout, `CLASS: ${classLabel(view.heroClass)}`, {
-    row: 1,
-    column: 0,
-  });
-  layout = writeText(layout, 'SOMETHING WAITS', { row: 2, column: 0 });
-  layout = writeText(layout, 'BEYOND', { row: 3, column: 0 });
-  layout = writeText(layout, `${choice.number} ${choice.label}`, {
-    row: 4,
-    column: 0,
-  });
-  return writeText(layout, 'PROVISIONAL ROOM', { row: 5, column: 0 });
 }
 
 export function renderVictoryView(view: VictoryView): FlagshipLayout {
@@ -90,12 +92,12 @@ export function renderVictoryView(view: VictoryView): FlagshipLayout {
     row: 1,
     column: 0,
   });
-  layout = writeText(layout, `TEST ROLL: ${view.provisionalRoll}`, {
+  layout = writeText(layout, `ROOMS FOUND: ${view.roomsFound}`, {
     row: 2,
     column: 0,
   });
-  layout = writeText(layout, 'VERTICAL SLICE ONLY', { row: 4, column: 0 });
-  return writeText(layout, 'PROVISIONAL OUTCOME', { row: 5, column: 0 });
+  layout = writeText(layout, 'EXIT CHALLENGE', { row: 4, column: 0 });
+  return writeText(layout, 'ARRIVES IN SLICE 8', { row: 5, column: 0 });
 }
 
 export function renderDeathView(view: DeathView): FlagshipLayout {
@@ -119,12 +121,15 @@ export function renderDeathView(view: DeathView): FlagshipLayout {
   return writeText(layout, 'PROVISIONAL OUTCOME', { row: 5, column: 0 });
 }
 
-export function renderGameView(view: GameView): FlagshipLayout {
+export function renderGameView(
+  view: GameView,
+  shell: BoardShell = 'black',
+): FlagshipLayout {
   switch (view.kind) {
     case 'class-select':
       return renderClassSelectView(view);
-    case 'placeholder-room':
-      return renderPlaceholderRoomView(view);
+    case 'exploration':
+      return renderExplorationView(view, shell);
     case 'victory':
       return renderVictoryView(view);
     case 'death':
@@ -159,8 +164,15 @@ function classFromChoice(choice: GameChoice): HeroClass {
   throw new TypeError(`Unsupported class choice ${JSON.stringify(choice.id)}.`);
 }
 
-function classLabel(heroClass: HeroClass): string {
-  return heroClass.toUpperCase();
+function classLabel(heroClass: HeroClass): 'WARRIOR' | 'ROGUE' | 'WIZARD' {
+  switch (heroClass) {
+    case 'warrior':
+      return 'WARRIOR';
+    case 'rogue':
+      return 'ROGUE';
+    case 'wizard':
+      return 'WIZARD';
+  }
 }
 
 function assertNoChoices(

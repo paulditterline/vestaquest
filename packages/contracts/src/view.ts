@@ -51,7 +51,7 @@ export const DisplaySchema = z.discriminatedUnion('status', [
 export const ControllerViewKindSchema = z.enum([
   'title',
   'class-select',
-  'placeholder-room',
+  'exploration',
   'victory',
   'death',
 ]);
