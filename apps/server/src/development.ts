@@ -126,7 +126,7 @@ export function createDevelopmentComposition(
         transport instanceof MemoryBoardTransport &&
         transport.attempts.length === 0 &&
         !hasPendingPresentation
-          ? renderGameView(deriveView(stored.state))
+          ? renderGameView(deriveView(stored.state), options.shell ?? 'black')
           : current.layout;
       const projection = DevelopmentBoardProjectionSchema.parse({
         protocolVersion: PROTOCOL_VERSION,

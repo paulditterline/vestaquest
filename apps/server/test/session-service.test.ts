@@ -11,7 +11,7 @@ import {
   type SessionIdFactory,
 } from '../src/index.js';
 
-function createHarness(seed = 1) {
+function createHarness(seed = 10) {
   let id = 0;
   let now = 1_000;
   const repository = new InMemorySessionRepository();
@@ -45,7 +45,7 @@ function command(
   });
 }
 
-async function createReadySession(seed = 1) {
+async function createReadySession(seed = 10) {
   const harness = createHarness(seed);
   const created = await harness.service.createSession();
   await harness.service.acknowledgeDisplayed(created.sessionId, 0);
@@ -96,7 +96,7 @@ describe('SessionService creation and presentation state', () => {
   });
 
   it('represents blocked and terminal-complete display states', async () => {
-    const { service, sessionId } = await createReadySession(1);
+    const { service, sessionId } = await createReadySession(10);
     const blocked = await service.markDisplayBlocked(sessionId, 0);
     expect(blocked.view.display.status).toBe('blocked');
 
@@ -108,16 +108,22 @@ describe('SessionService creation and presentation state', () => {
     if (selected.kind !== 'response') return;
     expect(selected.response.view.display.status).toBe('locked');
 
-    await service.acknowledgeDisplayed(sessionId, 1);
-    const terminal = await service.submitCommand(
-      command(sessionId, 'room', 1, 1),
-    );
+    const route = [1, 1, 2, 1, 1, 1, 1];
+    let terminal;
+    for (const [index, choice] of route.entries()) {
+      const version = index + 1;
+      await service.acknowledgeDisplayed(sessionId, version);
+      terminal = await service.submitCommand(
+        command(sessionId, `move-${index}`, version, choice),
+      );
+    }
+    if (!terminal) throw new Error('Missing terminal command result.');
     expect(terminal.kind).toBe('response');
     if (terminal.kind !== 'response') return;
     expect(terminal.response.view.kind).toBe('victory');
     expect(terminal.response.view.display.status).toBe('locked');
 
-    const complete = await service.acknowledgeDisplayed(sessionId, 2);
+    const complete = await service.acknowledgeDisplayed(sessionId, 8);
     expect(complete.view.display).toEqual({
       status: 'complete',
       legalChoices: [],
@@ -136,9 +142,10 @@ describe('authoritative numbered commands', () => {
     expect(result.kind).toBe('response');
     if (result.kind !== 'response') return;
     expect(result.response.outcome).toBe('accepted');
-    expect(stored?.state.phase).toEqual({
-      kind: 'placeholder-room',
+    expect(stored?.state.phase).toMatchObject({
+      kind: 'exploration',
       heroClass: 'rogue',
+      dungeon: { currentRoomId: 'A', visitedRoomIds: ['A'] },
     });
     expect(stored?.state.acceptedCommands[0]?.command.choiceId).toBe(
       'class.rogue',

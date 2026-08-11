@@ -137,11 +137,11 @@ describe('Fastify session API', () => {
       view: { version: 1, display: { status: 'locked' } },
     });
 
-    const roomView = await pollView(server, sessionId, 'ready');
-    expect(roomView).toMatchObject({
+    const explorationView = await pollView(server, sessionId, 'ready');
+    expect(explorationView).toMatchObject({
       version: 1,
-      kind: 'placeholder-room',
-      display: { legalChoices: [1] },
+      kind: 'exploration',
+      display: { legalChoices: [1, 2] },
     });
     expect(transport.attempts).toHaveLength(3);
   });

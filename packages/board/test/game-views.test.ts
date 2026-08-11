@@ -1,4 +1,5 @@
 import {
+  CHOICE_IDS,
   applyCommand,
   createRun,
   deriveTitlePresentation,
@@ -14,7 +15,7 @@ import {
   snapshotLayout,
 } from '../src/index.js';
 
-describe('Slice 3 semantic game-view renderers', () => {
+describe('semantic game-view renderers', () => {
   it('renders the non-actionable title presentation exactly', () => {
     const layout = renderTitlePresentation(deriveTitlePresentation(), 'black');
     expect(isFlagshipLayout(layout)).toBe(true);
@@ -27,35 +28,48 @@ describe('Slice 3 semantic game-view renderers', () => {
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 
-  it('renders the placeholder room and its numbered choice', () => {
-    const initial = createRun(1);
-    const selected = choose(initial, 'class.warrior', 'select-warrior');
-    const layout = renderGameView(deriveView(selected));
+  it('renders the live exploration HUD on black and white shells', () => {
+    const state = choose(createRun(10), CHOICE_IDS.warrior, 'select-warrior');
+    const view = deriveView(state);
+    expect(view.kind).toBe('exploration');
+    for (const shell of ['black', 'white'] as const) {
+      const layout = renderGameView(view, shell);
+      expect(isFlagshipLayout(layout)).toBe(true);
+      expect(snapshotLayout(layout)).toMatchSnapshot();
+    }
+  });
+
+  it('renders a discovered dead end without moving the current marker', () => {
+    let state = choose(createRun(10), CHOICE_IDS.rogue, 'select-rogue');
+    state = choose(state, CHOICE_IDS.east, 'try-east');
+    const layout = renderGameView(deriveView(state), 'black');
     expect(isFlagshipLayout(layout)).toBe(true);
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 
-  it('renders the provisional victory with no actionable choice', () => {
-    const view = terminalView(1);
+  it('renders the provisional exit outcome after the hidden room is found', () => {
+    const view = escapeView();
     expect(view.kind).toBe('victory');
-    const layout = renderGameView(view);
-    expect(isFlagshipLayout(layout)).toBe(true);
-    expect(snapshotLayout(layout)).toMatchSnapshot();
-  });
-
-  it('renders the provisional death with no actionable choice', () => {
-    const view = terminalView(2);
-    expect(view.kind).toBe('death');
     const layout = renderGameView(view);
     expect(isFlagshipLayout(layout)).toBe(true);
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 });
 
-function terminalView(seed: number): GameView {
-  const initial = createRun(seed);
-  const room = choose(initial, 'class.warrior', 'select-warrior');
-  return deriveView(choose(room, 'placeholder.enter-darkness', 'enter'));
+function escapeView(): GameView {
+  let state = choose(createRun(10), CHOICE_IDS.warrior, 'select-warrior');
+  for (const direction of [
+    CHOICE_IDS.north,
+    CHOICE_IDS.north,
+    CHOICE_IDS.east,
+    CHOICE_IDS.north,
+    CHOICE_IDS.north,
+    CHOICE_IDS.east,
+    CHOICE_IDS.east,
+  ]) {
+    state = choose(state, direction, `move-${state.revision}`);
+  }
+  return deriveView(state);
 }
 
 function choose(

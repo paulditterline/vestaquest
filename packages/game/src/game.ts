@@ -1,4 +1,15 @@
-import { createRng, rollDie } from './rng.js';
+import { createRng } from './rng.js';
+import {
+  DIRECTIONS,
+  MAP_SIZE,
+  getRoom,
+  getTopology,
+  positionKey,
+  selectDungeon,
+  type Direction,
+  type DungeonTopology,
+  type RoomConnection,
+} from './topology.js';
 import {
   CHOICE_IDS,
   GAME_RULES_VERSION,
@@ -6,10 +17,14 @@ import {
   type AcceptedCommandEntry,
   type ApplyCommandResult,
   type ChoiceId,
+  type DungeonRunState,
+  type ExplorationPhase,
   type GameChoice,
   type GameCommand,
   type GameView,
   type HeroClass,
+  type MapCellViewState,
+  type MapViewGrid,
   type RunPhase,
   type RunState,
   type TitlePresentation,
@@ -23,9 +38,36 @@ const CLASS_CHOICES = freezeChoices([
   { id: CHOICE_IDS.wizard, number: 3, label: 'WIZARD' },
 ]);
 
-const PLACEHOLDER_ROOM_CHOICES = freezeChoices([
-  { id: CHOICE_IDS.enterDarkness, number: 1, label: 'ENTER' },
-]);
+/** Gate D will replace these layout-safe values with the first balance model. */
+const PROVISIONAL_HERO_STATS = Object.freeze({
+  warrior: Object.freeze({
+    level: 1,
+    hp: 5,
+    maximumHp: 5,
+    power: 5,
+    defense: 4,
+    skill: 2,
+    luck: 2,
+  }),
+  rogue: Object.freeze({
+    level: 1,
+    hp: 4,
+    maximumHp: 4,
+    power: 3,
+    defense: 3,
+    skill: 5,
+    luck: 5,
+  }),
+  wizard: Object.freeze({
+    level: 1,
+    hp: 3,
+    maximumHp: 3,
+    power: 5,
+    defense: 2,
+    skill: 3,
+    luck: 4,
+  }),
+});
 
 export function createRun(seed: number): RunState {
   return freezeState({
@@ -61,22 +103,29 @@ export function deriveView(state: RunState): GameView {
         prompt: 'CHOOSE YOUR CLASS',
         choices: CLASS_CHOICES,
       });
-    case 'placeholder-room':
+    case 'exploration': {
+      const choices = deriveMovementChoices(state.phase.dungeon);
+      const stats = PROVISIONAL_HERO_STATS[state.phase.heroClass];
       return Object.freeze({
         ...base,
-        kind: 'placeholder-room',
+        kind: 'exploration',
         heroClass: state.phase.heroClass,
-        heading: 'A DARK DOOR',
-        body: 'SOMETHING WAITS BEYOND',
-        choices: PLACEHOLDER_ROOM_CHOICES,
+        ...stats,
+        roomsFound: state.phase.dungeon.visitedRoomIds.length,
+        directions: Object.freeze(
+          choices.map((choice) => directionForChoice(choice.id)),
+        ),
+        grid: deriveMapGrid(state.phase.dungeon),
+        choices,
       });
+    }
     case 'victory':
       return Object.freeze({
         ...base,
         kind: 'victory',
         heroClass: state.phase.heroClass,
         heading: 'YOU ESCAPED',
-        provisionalRoll: state.phase.provisionalRoll,
+        roomsFound: state.phase.roomsFound,
         choices: NO_CHOICES,
       });
     case 'death':
@@ -202,35 +251,175 @@ function transitionFromChoice(
   switch (state.phase.kind) {
     case 'class-select': {
       const heroClass = classForChoice(choiceId);
+      const selected = selectDungeon(state.rng);
+      const dungeon: DungeonRunState = Object.freeze({
+        topologyId: selected.topologyId,
+        exitRoomId: selected.exitRoomId,
+        currentRoomId: selected.entranceRoomId,
+        visitedRoomIds: Object.freeze([selected.entranceRoomId]),
+        revealedDeadEndPositions: Object.freeze([]),
+      });
       return {
-        phase: Object.freeze({ kind: 'placeholder-room', heroClass }),
-        rng: state.rng,
+        phase: Object.freeze({ kind: 'exploration', heroClass, dungeon }),
+        rng: selected.rng,
       };
     }
-    case 'placeholder-room': {
-      const draw = rollDie(state.rng, 6);
-
-      // This parity outcome exists only to exercise deterministic terminal paths.
-      // It is not a proposed room-resolution or balance rule.
-      const phase: RunPhase =
-        draw.value % 2 === 0
-          ? Object.freeze({
-              kind: 'victory',
-              heroClass: state.phase.heroClass,
-              provisionalRoll: draw.value,
-            })
-          : Object.freeze({
-              kind: 'death',
-              heroClass: state.phase.heroClass,
-              cause: 'THE DARKNESS',
-              provisionalRoll: draw.value,
-            });
-
-      return { phase, rng: draw.state };
-    }
+    case 'exploration':
+      return {
+        phase: move(state.phase, directionForChoice(choiceId)),
+        rng: state.rng,
+      };
     case 'victory':
     case 'death':
       throw new Error('Terminal phases cannot transition.');
+  }
+}
+
+function move(phase: ExplorationPhase, direction: Direction): RunPhase {
+  const topology = getTopology(phase.dungeon.topologyId);
+  const connection = getRoom(topology, phase.dungeon.currentRoomId).connections[
+    direction
+  ];
+  if (!connection) {
+    throw new Error(`Direction ${direction} is not available.`);
+  }
+
+  if (connection.kind === 'dead-end') {
+    const key = positionKey(connection.position);
+    return Object.freeze({
+      ...phase,
+      dungeon: Object.freeze({
+        ...phase.dungeon,
+        revealedDeadEndPositions: Object.freeze([
+          ...phase.dungeon.revealedDeadEndPositions,
+          key,
+        ]),
+      }),
+    });
+  }
+
+  const visitedRoomIds = phase.dungeon.visitedRoomIds.includes(
+    connection.roomId,
+  )
+    ? phase.dungeon.visitedRoomIds
+    : Object.freeze([...phase.dungeon.visitedRoomIds, connection.roomId]);
+  if (connection.roomId === phase.dungeon.exitRoomId) {
+    return Object.freeze({
+      kind: 'victory',
+      heroClass: phase.heroClass,
+      roomsFound: visitedRoomIds.length,
+    });
+  }
+
+  return Object.freeze({
+    ...phase,
+    dungeon: Object.freeze({
+      ...phase.dungeon,
+      currentRoomId: connection.roomId,
+      visitedRoomIds,
+    }),
+  });
+}
+
+function deriveMovementChoices(
+  dungeon: DungeonRunState,
+): readonly GameChoice[] {
+  const topology = getTopology(dungeon.topologyId);
+  const connections = getRoom(topology, dungeon.currentRoomId).connections;
+  const choices = DIRECTIONS.flatMap((direction) => {
+    const connection = connections[direction];
+    if (!connection || isRevealedDeadEnd(connection, dungeon)) return [];
+    return [
+      {
+        id: choiceForDirection(direction),
+        number: 0,
+        label: direction,
+      },
+    ];
+  }).map((choice, index) => ({ ...choice, number: index + 1 }));
+  return freezeChoices(choices);
+}
+
+function deriveMapGrid(dungeon: DungeonRunState): MapViewGrid {
+  const topology = getTopology(dungeon.topologyId);
+  const rows: MapCellViewState[][] = Array.from({ length: MAP_SIZE }, () =>
+    Array.from({ length: MAP_SIZE }, () => 'unexplored'),
+  );
+
+  for (const roomId of dungeon.visitedRoomIds) {
+    const position = getRoom(topology, roomId).position;
+    rows[position.row]![position.column] = 'explored';
+  }
+  for (const key of dungeon.revealedDeadEndPositions) {
+    const match = /^(\d),(\d)$/.exec(key);
+    if (!match) throw new TypeError('Invalid revealed dead-end position.');
+    const row = Number(match[1]!);
+    const column = Number(match[2]!);
+    rows[row]![column] = 'dead-end';
+  }
+
+  for (const roomId of dungeon.visitedRoomIds) {
+    const visitedRoom = getRoom(topology, roomId);
+    for (const direction of DIRECTIONS) {
+      const connection = visitedRoom.connections[direction];
+      if (!connection || isRevealedDeadEnd(connection, dungeon)) continue;
+      const position = connectionPosition(topology, connection);
+      if (rows[position.row]![position.column] === 'unexplored') {
+        rows[position.row]![position.column] = 'frontier';
+      }
+    }
+  }
+
+  const current = getRoom(topology, dungeon.currentRoomId);
+  rows[current.position.row]![current.position.column] = 'current';
+
+  return Object.freeze(rows.map((row) => Object.freeze(row))) as MapViewGrid;
+}
+
+function connectionPosition(
+  topology: DungeonTopology,
+  connection: RoomConnection,
+) {
+  return connection.kind === 'dead-end'
+    ? connection.position
+    : getRoom(topology, connection.roomId).position;
+}
+
+function isRevealedDeadEnd(
+  connection: RoomConnection,
+  dungeon: DungeonRunState,
+): boolean {
+  return (
+    connection.kind === 'dead-end' &&
+    dungeon.revealedDeadEndPositions.includes(positionKey(connection.position))
+  );
+}
+
+function choiceForDirection(direction: Direction): ChoiceId {
+  switch (direction) {
+    case 'N':
+      return CHOICE_IDS.north;
+    case 'E':
+      return CHOICE_IDS.east;
+    case 'S':
+      return CHOICE_IDS.south;
+    case 'W':
+      return CHOICE_IDS.west;
+  }
+}
+
+function directionForChoice(choiceId: ChoiceId): Direction {
+  switch (choiceId) {
+    case CHOICE_IDS.north:
+      return 'N';
+    case CHOICE_IDS.east:
+      return 'E';
+    case CHOICE_IDS.south:
+      return 'S';
+    case CHOICE_IDS.west:
+      return 'W';
+    default:
+      throw new Error(`Choice ${choiceId} is not a direction.`);
   }
 }
 

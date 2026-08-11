@@ -30,7 +30,7 @@ const lockedResponse = {
   outcome: 'accepted' as const,
   view: {
     version: 4,
-    kind: 'placeholder-room' as const,
+    kind: 'exploration' as const,
     display: { status: 'locked' as const, legalChoices: [] },
   },
 };
@@ -40,7 +40,7 @@ const lockedSessionResponse = CreateSessionResponseSchema.parse({
   sessionId: 'session-test',
   view: {
     version: 4,
-    kind: 'placeholder-room',
+    kind: 'exploration',
     display: { status: 'locked', legalChoices: [] },
   },
 });

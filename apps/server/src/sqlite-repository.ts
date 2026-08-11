@@ -11,6 +11,7 @@ import {
   replayRun,
   type AcceptedCommandEntry,
   type GameView,
+  type MapViewGrid,
   type RunState,
 } from '@vestaquest/game';
 import { DuplicateSessionError, type SessionRepository } from './repository.js';
@@ -440,7 +441,7 @@ function parseAcceptedCommand(value: unknown): AcceptedCommandEntry {
     }),
     resultingPhase: requireEnum(entry.resultingPhase, [
       'class-select',
-      'placeholder-room',
+      'exploration',
       'victory',
       'death',
     ] as const),
@@ -491,7 +492,7 @@ function parseGameView(value: unknown): GameView {
   const view = requireRecord(value);
   const kind = requireEnum(view.kind, [
     'class-select',
-    'placeholder-room',
+    'exploration',
     'victory',
     'death',
   ] as const);
@@ -516,36 +517,59 @@ function parseGameView(value: unknown): GameView {
         throw new PersistenceCorruptionError('class choices');
       }
       return Object.freeze({ ...base, kind, prompt: 'CHOOSE YOUR CLASS' });
-    case 'placeholder-room':
+    case 'exploration': {
       requireKeys(view, [
         'id',
         'revision',
         'choices',
         'kind',
         'heroClass',
-        'heading',
-        'body',
+        'level',
+        'hp',
+        'maximumHp',
+        'power',
+        'defense',
+        'skill',
+        'luck',
+        'roomsFound',
+        'directions',
+        'grid',
       ]);
-      if (
-        view.heading !== 'A DARK DOOR' ||
-        view.body !== 'SOMETHING WAITS BEYOND'
-      ) {
+      if (!Array.isArray(view.directions) || !Array.isArray(view.grid)) {
         throw new PersistenceCorruptionError('game view');
       }
+      const directions = Object.freeze(
+        view.directions.map((direction) =>
+          requireEnum(direction, ['N', 'E', 'S', 'W'] as const),
+        ),
+      );
       if (
-        !isDeepStrictEqual(choices, [
-          { id: 'placeholder.enter-darkness', number: 1, label: 'ENTER' },
-        ])
+        directions.length < 1 ||
+        directions.length > 4 ||
+        new Set(directions).size !== directions.length ||
+        choices.some(
+          (choice, index) =>
+            choice.number !== index + 1 || choice.label !== directions[index],
+        )
       ) {
-        throw new PersistenceCorruptionError('placeholder choices');
+        throw new PersistenceCorruptionError('exploration choices');
       }
       return Object.freeze({
         ...base,
         kind,
         heroClass: parseHeroClass(view.heroClass),
-        heading: 'A DARK DOOR',
-        body: 'SOMETHING WAITS BEYOND',
+        level: requirePositiveInteger(view.level, 'hero level'),
+        hp: requireNonnegativeInteger(view.hp, 'hero HP'),
+        maximumHp: requirePositiveInteger(view.maximumHp, 'hero maximum HP'),
+        power: requireNonnegativeInteger(view.power, 'hero power'),
+        defense: requireNonnegativeInteger(view.defense, 'hero defense'),
+        skill: requireNonnegativeInteger(view.skill, 'hero skill'),
+        luck: requireNonnegativeInteger(view.luck, 'hero luck'),
+        roomsFound: requirePositiveInteger(view.roomsFound, 'rooms found'),
+        directions,
+        grid: parseMapGrid(view.grid),
       });
+    }
     case 'victory':
       requireKeys(view, [
         'id',
@@ -554,7 +578,7 @@ function parseGameView(value: unknown): GameView {
         'kind',
         'heroClass',
         'heading',
-        'provisionalRoll',
+        'roomsFound',
       ]);
       if (view.heading !== 'YOU ESCAPED')
         throw new PersistenceCorruptionError('game view');
@@ -565,10 +589,7 @@ function parseGameView(value: unknown): GameView {
         kind,
         heroClass: parseHeroClass(view.heroClass),
         heading: 'YOU ESCAPED',
-        provisionalRoll: requireInteger(
-          view.provisionalRoll,
-          'provisional roll',
-        ),
+        roomsFound: requirePositiveInteger(view.roomsFound, 'rooms found'),
       });
     case 'death':
       requireKeys(view, [
@@ -611,13 +632,41 @@ function parseChoices(value: unknown) {
           'class.warrior',
           'class.rogue',
           'class.wizard',
-          'placeholder.enter-darkness',
+          'move.north',
+          'move.east',
+          'move.south',
+          'move.west',
         ] as const),
         number: requirePositiveInteger(record.number, 'choice number'),
         label: requireString(record.label),
       });
     }),
   );
+}
+
+function parseMapGrid(value: unknown): MapViewGrid {
+  if (!Array.isArray(value) || value.length !== 5) {
+    throw new PersistenceCorruptionError('map grid');
+  }
+  const rows = value.map((row) => {
+    if (!Array.isArray(row) || row.length !== 5) {
+      throw new PersistenceCorruptionError('map row');
+    }
+    return Object.freeze(
+      row.map((cell) =>
+        requireEnum(cell, [
+          'unexplored',
+          'frontier',
+          'explored',
+          'current',
+          'active-encounter',
+          'resolved-encounter',
+          'dead-end',
+        ] as const),
+      ),
+    );
+  });
+  return Object.freeze(rows) as MapViewGrid;
 }
 
 function parseHeroClass(value: unknown) {

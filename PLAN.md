@@ -1,6 +1,6 @@
 # VestaQuest implementation plan
 
-Status: Slice 3 complete; Gate C map grammar approved; Slice 4 next
+Status: Slice 4 implemented and owner-playtested; awaiting merge
 
 Last updated: 2026-08-10
 
@@ -616,9 +616,10 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Merge the approved Gate C map/HUD grammar and its exact renderer snapshots.
-2. Implement Slice 4 on `codex/map-exploration`, with topology invariants and
-   exact golden layouts before adding broader game content.
+1. Merge Slice 4's ten authored maps, hidden-exit selection, persistent map
+   memory, topology invariants, and exact golden layouts.
+2. Resolve Gate D's remaining combat values, then implement Slice 5 on
+   `codex/core-combat`.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed

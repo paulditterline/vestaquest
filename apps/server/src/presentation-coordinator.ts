@@ -108,7 +108,7 @@ export class PresentationCoordinator {
           this.#shell,
         );
       case 'game-view':
-        return renderGameView(intent.payload.view);
+        return renderGameView(intent.payload.view, this.#shell);
     }
   }
 

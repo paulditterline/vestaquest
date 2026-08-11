@@ -137,7 +137,7 @@ describe('PresentationCoordinator', () => {
     );
     expect((await service.getSession(created.sessionId)).view.display).toEqual({
       status: 'ready',
-      legalChoices: [1],
+      legalChoices: [1, 2],
     });
   });
 

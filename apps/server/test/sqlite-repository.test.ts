@@ -76,7 +76,7 @@ describe('SqliteSessionRepository', () => {
     expect(await restartedService.getSession(created.sessionId)).toMatchObject({
       view: {
         version: 1,
-        kind: 'placeholder-room',
+        kind: 'exploration',
         display: { status: 'locked', legalChoices: [] },
       },
     });
