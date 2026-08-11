@@ -1,6 +1,7 @@
 import { CHARACTER_CODE, type CharacterCode } from './character-codes.js';
 import { createFlagshipLayout, type FlagshipLayout } from './layout.js';
 import { fillRegion, withCell, withCells, writeText } from './primitives.js';
+import { renderMapPrototype, type MapPrototypeView } from './map-prototypes.js';
 
 export type BoardShell = 'black' | 'white';
 
@@ -195,6 +196,74 @@ const provisionalClasses: readonly ClassSummary[] = Object.freeze([
   { name: 'WIZARD', hp: 4, power: 5, defense: 2, skill: 3, luck: 4 },
 ]);
 
+const U = 'unexplored' as const;
+const F = 'frontier' as const;
+const E = 'explored' as const;
+const C = 'current' as const;
+const A = 'active-encounter' as const;
+const V = 'resolved-encounter' as const;
+const D = 'dead-end' as const;
+
+const mapPrototypeViews: readonly MapPrototypeView[] = Object.freeze([
+  {
+    heroClass: 'WARRIOR',
+    level: 1,
+    hp: 5,
+    maximumHp: 5,
+    power: 5,
+    defense: 4,
+    skill: 2,
+    luck: 2,
+    roomsFound: 2,
+    directions: ['N', 'E', 'S'],
+    grid: [
+      [U, U, U, U, U],
+      [U, U, F, U, U],
+      [U, E, C, F, U],
+      [U, U, F, U, U],
+      [U, U, U, U, U],
+    ],
+  },
+  {
+    heroClass: 'ROGUE',
+    level: 2,
+    hp: 3,
+    maximumHp: 5,
+    power: 3,
+    defense: 3,
+    skill: 5,
+    luck: 5,
+    roomsFound: 7,
+    directions: ['N', 'E', 'W'],
+    grid: [
+      [U, D, E, A, U],
+      [U, E, V, E, U],
+      [F, E, C, F, U],
+      [U, U, E, U, U],
+      [U, U, D, U, U],
+    ],
+  },
+  {
+    heroClass: 'WIZARD',
+    level: 3,
+    hp: 2,
+    maximumHp: 5,
+    power: 5,
+    defense: 2,
+    skill: 3,
+    luck: 4,
+    roomsFound: 12,
+    directions: ['N', 'E', 'S', 'W'],
+    grid: [
+      [D, E, V, E, F],
+      [U, E, E, D, U],
+      [F, E, C, E, F],
+      [U, V, E, E, U],
+      [D, E, F, E, D],
+    ],
+  },
+]);
+
 export function createFixtureCatalog(
   shell: BoardShell,
 ): readonly BoardFixture[] {
@@ -244,6 +313,25 @@ export function createFixtureCatalog(
           layout: renderCombatHud(shell),
         },
       ],
+    },
+    {
+      id: 'map-grammar',
+      label: 'Map and exploration HUD',
+      description:
+        'Approved Gate C grammar: five-by-five two-flap rooms, persistent stats, and numbered directions.',
+      provisionalValues: true,
+      frames: mapPrototypeViews.map((view, index) => ({
+        id: `map-${index + 1}`,
+        label: ['Early exploration', 'Branch and dead ends', 'Dense late map'][
+          index
+        ]!,
+        accessibleSummary: [
+          'Early Warrior exploration with three unknown directions.',
+          'Mid-run Rogue map with an active threat, a resolved encounter, dead ends, and three directions.',
+          'Dense Wizard map exercising the approved exploration states and all four directions.',
+        ][index]!,
+        layout: renderMapPrototype(shell, view),
+      })),
     },
     {
       id: 'choice-marker',

@@ -1,6 +1,6 @@
 # VestaQuest implementation plan
 
-Status: Slice 3 complete; Gate C map-grammar conversation next
+Status: Slice 3 complete; Gate C map grammar approved; Slice 4 next
 
 Last updated: 2026-08-10
 
@@ -116,7 +116,7 @@ Fallback order if the ideal effect is unavailable:
 
 Do not implement per-tile network writes; the Cloud cadence makes that both slow and wasteful.
 
-### Gate C — map grammar, before producing map content
+### Gate C — map grammar, resolved 2026-08-10
 
 Prototype at least three exact 6x22 exploration layouts and choose:
 
@@ -127,7 +127,17 @@ Prototype at least three exact 6x22 exploration layouts and choose:
 - a non-color-only redundancy for all important states;
 - ten authored maps versus a validated hybrid generator.
 
-Recommendation: start with ten authored topology templates, then randomize content placement, locks, and selected links subject to invariants. This keeps the bounded 1980s-game personality, makes pacing tunable, and still provides replayability. A fully procedural generator can be revisited only if the authored-hybrid approach feels repetitive.
+Decision:
+
+- Use a 5x5 logical grid on the right, with each room represented by two physical flaps. Center `MAP` above its ten columns.
+- Keep the class, level, HP text/bar, Power, Defense, Skill, Luck, and rooms-found count in the left 11 columns. Show directions compactly on the final row as `1N 2E 3S 4W`.
+- Use blank pairs for unexplored space, yellow `?` for an available unknown frontier, shell-contrasting `.` for explored rooms, green `@` for the current room, red `!` for an active threat, orange `!` for a resolved fight, and red `X` for a discovered dead end. Symbols make every critical state readable without color alone.
+- Numbered direction choices are authoritative. Visual adjacency does not imply that two rooms connect.
+- Trying a dead end reveals its red `X`, removes that direction, and leaves the character in the current room. It costs the choice but causes no damage by itself.
+- Ordinary discovered connections are traversable both ways. Resolved encounters do not retrigger. A green current-room marker takes display priority; after the player leaves, any resolved orange encounter marker underneath it becomes visible again.
+- Build ten authored topology templates with randomized content and a hidden exit. Each template has one entrance and multiple valid, suitably distant exit candidates; exactly one actual exit is selected secretly per run and is never shown before discovery.
+
+These decisions were reviewed in the exact 6x22 Board Lab on a black-shell presentation. The renderer also requires shell-aware contrast and snapshot coverage for a white-shell Flagship.
 
 ### Gate D — first balance model, before the complete combat slice
 
@@ -606,11 +616,8 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Hold the Gate C owner conversation before committing to a map grammar.
-2. Prototype at least three exact 6x22 map/HUD layouts from that conversation.
-3. Select the map cell scale, HUD placement, state redundancy, and authored-hybrid
-   topology approach.
-4. Implement Slice 4 on `codex/map-exploration`, with topology invariants and
+1. Merge the approved Gate C map/HUD grammar and its exact renderer snapshots.
+2. Implement Slice 4 on `codex/map-exploration`, with topology invariants and
    exact golden layouts before adding broader game content.
 
 The order remains physical-first: close the full controller-to-board loop, agree

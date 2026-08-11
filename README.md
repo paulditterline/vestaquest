@@ -8,7 +8,7 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-Implementation is underway. Slices 0–3 are complete. The project now has the deterministic board package, Flagship simulator, server-only Cloud transport, ordered cadence queue, deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, runnable private development composition, and SQLite restart durability. The signature initiative sequence and complete guarded controller-to-Cloud vertical path have both been accepted by the owner on the physical black-shell Flagship. The next step is the Gate C map-grammar conversation before Slice 4 map exploration begins.
+Implementation is underway. Slices 0–3 are complete. The project now has the deterministic board package, Flagship simulator, server-only Cloud transport, ordered cadence queue, deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, runnable private development composition, and SQLite restart durability. The signature initiative sequence and complete guarded controller-to-Cloud vertical path have both been accepted by the owner on the physical black-shell Flagship. Gate C's exact 5x5 map/HUD grammar is approved and prototyped; Slice 4 map exploration is next.
 
 ## Run the Board Lab
 
