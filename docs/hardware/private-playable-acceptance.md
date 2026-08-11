@@ -91,3 +91,17 @@ and its parity-based terminal result are explicitly provisional game content.
 - Credentials were absent from HTTP responses and startup/output logs.
 - Still requires owner observation: room-distance readability, sound, perceived
   pacing, and whether the complete controller-to-board path feels acceptable.
+
+## Recorded owner acceptance — 2026-08-10
+
+- The owner observed the full sequence in the room and controlled it through the
+  numbered web controller.
+- Observed path: title → class select → Wizard → placeholder room → provisional
+  death (`YOU DIED BY THE DARKNESS`, test roll 3).
+- The controller exposed the three class numbers only after class selection was
+  stable, then exposed the room's single legal option and reached `COMPLETE`
+  after the terminal frame.
+- Owner verdict: “it all looks great.” The complete path's room-scale display,
+  physical behavior, pacing, and controller handoff are accepted for Slice 3.
+- Live output was stopped immediately after confirmation; the terminal frame was
+  left on the board without an unnecessary restoration write.

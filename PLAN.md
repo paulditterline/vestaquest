@@ -1,6 +1,6 @@
 # VestaQuest implementation plan
 
-Status: Slice 3 owner physical-experience acceptance; Gate B resolved with physical Wave/Fast validation
+Status: Slice 3 complete; Gate C map-grammar conversation next
 
 Last updated: 2026-08-10
 
@@ -412,11 +412,11 @@ Local API support can enter this slice if the board is already enabled; otherwis
 
 ### Slice 3 — vertical game kernel
 
-Status: **Merged; technical Cloud run passed, owner physical observation pending**
+Status: **Complete**
 
 Branch: `codex/game-kernel`
 
-Current checkpoint: the deterministic kernel, versioned controller contracts, semantic 6x22 vertical-slice renderers, authoritative session service, sanitized Fastify routes, minimal numbered controller, presentation coordinator, loopback-only playable development composition, and SQLite persistence are merged. Integration and real-browser tests cover HTTP → ordered memory-board delivery → display unlock, controller recovery, deterministic replay, idempotency, concurrency, exact layouts, and process-restart resume. A separately gated live composition reuses that pipeline with the Cloud transport while keeping ordinary development memory-only. On 2026-08-10, a physical technical run delivered title → class select → Rogue room → provisional victory in order and exact Cloud readback matched the terminal frame. The remaining acceptance item is the owner's room-distance observation of the complete path's readability, sound, and pacing.
+Current checkpoint: the deterministic kernel, versioned controller contracts, semantic 6x22 vertical-slice renderers, authoritative session service, sanitized Fastify routes, minimal numbered controller, presentation coordinator, loopback-only playable development composition, and SQLite persistence are merged. Integration and real-browser tests cover HTTP → ordered memory-board delivery → display unlock, controller recovery, deterministic replay, idempotency, concurrency, exact layouts, and process-restart resume. A separately gated live composition reuses that pipeline with the Cloud transport while keeping ordinary development memory-only. On 2026-08-10, a technical physical run delivered title → class select → Rogue room → provisional victory in order with exact Cloud readback. The owner then observed and controlled a complete title → class select → Wizard room → provisional death path in the room and accepted the display, physical behavior, pacing, and controller handoff. Slice 3 is closed.
 
 Build:
 
@@ -606,13 +606,11 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Have the owner observe the already validated physical vertical path at room
-   distance, record the experience notes, then close Slice 3.
-2. Hold the Gate C owner conversation before committing to a map grammar.
-3. Prototype at least three exact 6x22 map/HUD layouts from that conversation.
-4. Select the map cell scale, HUD placement, state redundancy, and authored-hybrid
+1. Hold the Gate C owner conversation before committing to a map grammar.
+2. Prototype at least three exact 6x22 map/HUD layouts from that conversation.
+3. Select the map cell scale, HUD placement, state redundancy, and authored-hybrid
    topology approach.
-5. Implement Slice 4 on `codex/map-exploration`, with topology invariants and
+4. Implement Slice 4 on `codex/map-exploration`, with topology invariants and
    exact golden layouts before adding broader game content.
 
 The order remains physical-first: close the full controller-to-board loop, agree

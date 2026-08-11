@@ -8,7 +8,7 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-Implementation is underway. Slices 0–2 are complete: the deterministic board package, Flagship simulator, server-only Cloud transport, and ordered cadence queue are merged. The signature initiative sequence has been validated on the owner's physical black-shell Flagship; Wave/Fast produced the accepted left-to-right roll reveal while preserving and restoring the owner's normal transition setting. Slice 3's deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, runnable private development composition, and SQLite restart durability are merged. The guarded Cloud-backed path has completed a technical run on the physical Flagship; owner observation of the complete path's room-scale pacing/readability is the final Slice 3 acceptance item.
+Implementation is underway. Slices 0–3 are complete. The project now has the deterministic board package, Flagship simulator, server-only Cloud transport, ordered cadence queue, deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, runnable private development composition, and SQLite restart durability. The signature initiative sequence and complete guarded controller-to-Cloud vertical path have both been accepted by the owner on the physical black-shell Flagship. The next step is the Gate C map-grammar conversation before Slice 4 map exploration begins.
 
 ## Run the Board Lab
 
