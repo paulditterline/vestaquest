@@ -7,6 +7,7 @@ import {
   rollLightning,
   rollRun,
   rollSmash,
+  rollSteal,
   rollStun,
 } from '../src/index.js';
 
@@ -73,6 +74,20 @@ describe('approved opposed combat rolls', () => {
     expect(rollStun(createRng(257), 2, 3)).toMatchObject({
       roll: { leftTotal: 8, rightTotal: 8 },
       stunned: false,
+    });
+  });
+
+  it('adds one Skill for an Unaware Steal and requires a strict win', () => {
+    expect(rollSteal(createRng(1), 5, 3, true)).toMatchObject({
+      roll: { leftModifier: 6, rightModifier: 3 },
+      stolen: true,
+      unaware: true,
+      rng: { draws: 2 },
+    });
+    expect(rollSteal(createRng(257), 2, 3, false)).toMatchObject({
+      roll: { leftModifier: 2, leftTotal: 8, rightTotal: 8 },
+      stolen: false,
+      unaware: false,
     });
   });
 });

@@ -75,6 +75,13 @@ function enterWizardCombat(): RunState {
   return accept(state, 'wizard-east', CHOICE_IDS.east);
 }
 
+function enterRogueCombat(): RunState {
+  let state = beginExploration(10, CHOICE_IDS.rogue);
+  state = accept(state, 'rogue-north', CHOICE_IDS.north);
+  state = accept(state, 'rogue-north-again', CHOICE_IDS.north);
+  return accept(state, 'rogue-east', CHOICE_IDS.east);
+}
+
 describe('map exploration game kernel', () => {
   it('creates a class-select state and a separate title presentation', () => {
     const state = createRun(0x1234abcd);
@@ -488,6 +495,109 @@ describe('map exploration game kernel', () => {
         ({ roomId }) => roomId === encounterRoomId,
       ),
     ).toMatchObject({ currentHp: 2, status: 'active' });
+  });
+
+  it('uses the Unaware bonus to steal and auto-equip an empty slot', () => {
+    const entered = enterRogueCombat();
+    expect(entered.phase).toMatchObject({
+      kind: 'combat',
+      initiativeWinner: 'hero',
+      enemyHasActed: false,
+      stealUsed: false,
+    });
+    expect(deriveView(entered)).toMatchObject({
+      kind: 'combat',
+      stealAvailable: true,
+      choices: [
+        { id: CHOICE_IDS.attack, number: 1 },
+        { id: CHOICE_IDS.steal, number: 2, label: 'STEAL' },
+        { id: CHOICE_IDS.run, number: 3 },
+      ],
+    });
+
+    const stolen = choose(entered, 'steal', CHOICE_IDS.steal);
+    if (stolen.status !== 'accepted') throw new Error('Expected Steal.');
+    expect(stolen.presentations).toMatchObject([
+      {
+        kind: 'opposed-roll',
+        purpose: 'steal',
+        prompt: 'UNAWARE! ROGUE STEALS',
+        left: { modifier: 6 },
+        verdict: 'STOLE GHOUL FANG',
+      },
+      { kind: 'opposed-roll', prompt: 'GHOUL ATTACKS' },
+    ]);
+    expect(stolen.state.phase).toMatchObject({
+      kind: 'combat',
+      stats: { power: 4 },
+      equipment: { weapon: 'ghoul-fang', armor: null },
+      stealUsed: true,
+    });
+    if (stolen.state.phase.kind !== 'combat')
+      throw new Error('Expected combat.');
+    expect(
+      stolen.state.phase.dungeon.encounters.find(
+        ({ roomId }) => roomId === 'D',
+      ),
+    ).toMatchObject({ stealUsed: true });
+    const afterView = deriveView(stolen.state);
+    expect(afterView).toMatchObject({
+      kind: 'combat',
+      stealAvailable: false,
+    });
+    expect(afterView.choices.some(({ id }) => id === CHOICE_IDS.steal)).toBe(
+      false,
+    );
+
+    const retreatReady: RunState = { ...stolen.state, rng: createRng(257) };
+    const retreated = accept(retreatReady, 'run-with-loot', CHOICE_IDS.run);
+    expect(retreated.phase).toMatchObject({
+      kind: 'exploration',
+      equipment: { weapon: 'ghoul-fang' },
+      dungeon: { currentRoomId: 'C' },
+    });
+    const reentered = accept(retreated, 'reenter-after-steal', CHOICE_IDS.east);
+    expect(reentered.phase).toMatchObject({
+      kind: 'combat',
+      stealUsed: true,
+      equipment: { weapon: 'ghoul-fang' },
+    });
+    expect(
+      deriveView(reentered).choices.some(({ id }) => id === CHOICE_IDS.steal),
+    ).toBe(false);
+  });
+
+  it('pauses on Equip or Leave when stolen loot would replace gear', () => {
+    const entered = enterRogueCombat();
+    if (entered.phase.kind !== 'combat') throw new Error('Expected combat.');
+    const equipped: RunState = {
+      ...entered,
+      phase: {
+        ...entered.phase,
+        equipment: { weapon: 'ghoul-fang', armor: null },
+        stats: { ...entered.phase.stats, power: 4 },
+      },
+    };
+    const stolen = accept(equipped, 'steal-again', CHOICE_IDS.steal);
+    expect(deriveView(stolen)).toMatchObject({
+      kind: 'loot-select',
+      itemName: 'GHOUL FANG',
+      slot: 'WEAPON',
+      bonus: '+1 POWER',
+      equippedName: 'GHOUL FANG',
+      choices: [
+        { id: CHOICE_IDS.equipLoot, number: 1, label: 'EQUIP' },
+        { id: CHOICE_IDS.leaveLoot, number: 2, label: 'LEAVE' },
+      ],
+    });
+    const left = accept(stolen, 'leave-loot', CHOICE_IDS.leaveLoot);
+    expect(left.phase).toMatchObject({
+      kind: 'combat',
+      menu: 'actions',
+      pendingLoot: null,
+      equipment: { weapon: 'ghoul-fang' },
+      enemyHasActed: true,
+    });
   });
 
   it('retreats to the prior room and preserves the wounded active threat', () => {

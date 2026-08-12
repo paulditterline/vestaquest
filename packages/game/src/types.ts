@@ -4,8 +4,8 @@ import type { EnemyId } from './balance.js';
 import type { OpposedRoll } from './combat.js';
 import type { Direction, RoomId } from './topology.js';
 
-export const GAME_STATE_VERSION = 4 as const;
-export const GAME_RULES_VERSION = 'wizard-scrolls-v1' as const;
+export const GAME_STATE_VERSION = 5 as const;
+export const GAME_RULES_VERSION = 'rogue-steal-v1' as const;
 
 export const HERO_CLASSES = ['warrior', 'rogue', 'wizard'] as const;
 export type HeroClass = (typeof HERO_CLASSES)[number];
@@ -21,11 +21,14 @@ export const CHOICE_IDS = {
   item: 'action.item',
   attack: 'combat.attack',
   smash: 'combat.smash',
+  steal: 'combat.steal',
   spell: 'combat.spell',
   fireball: 'spell.fireball',
   lightning: 'spell.lightning',
   stun: 'spell.stun',
   cancelSpell: 'spell.cancel',
+  equipLoot: 'loot.equip',
+  leaveLoot: 'loot.leave',
   run: 'combat.run',
 } as const;
 
@@ -43,6 +46,11 @@ export type GameCommand = ChooseCommand;
 export const SCROLL_IDS = ['fireball', 'lightning', 'stun'] as const;
 export type ScrollId = (typeof SCROLL_IDS)[number];
 export type ScrollPouch = readonly ScrollId[];
+export type EquipmentItemId = 'ghoul-fang' | 'bone-mail';
+export type Equipment = Readonly<{
+  weapon: EquipmentItemId | null;
+  armor: EquipmentItemId | null;
+}>;
 
 export interface ClassSelectPhase {
   readonly kind: 'class-select';
@@ -62,6 +70,7 @@ export interface EncounterRunState {
   readonly enemyId: EnemyId;
   readonly currentHp: number;
   readonly status: 'active' | 'resolved';
+  readonly stealUsed: boolean;
 }
 
 export interface ExplorationPhase {
@@ -70,6 +79,7 @@ export interface ExplorationPhase {
   readonly stats: HeroStats;
   readonly consumable: 'healing-draught' | null;
   readonly scrollPouch: ScrollPouch;
+  readonly equipment: Equipment;
   readonly enemiesSlain: number;
   readonly dungeon: DungeonRunState;
 }
@@ -80,6 +90,7 @@ export interface CombatPhase {
   readonly stats: HeroStats;
   readonly consumable: 'healing-draught' | null;
   readonly scrollPouch: ScrollPouch;
+  readonly equipment: Equipment;
   readonly enemiesSlain: number;
   readonly dungeon: DungeonRunState;
   readonly encounterRoomId: RoomId;
@@ -88,7 +99,9 @@ export interface CombatPhase {
   readonly initiativeWinner: 'hero' | 'enemy';
   readonly enemyHasActed: boolean;
   readonly smashUsed: boolean;
-  readonly menu: 'actions' | 'spells';
+  readonly stealUsed: boolean;
+  readonly menu: 'actions' | 'spells' | 'loot';
+  readonly pendingLoot: EquipmentItemId | null;
 }
 
 export interface VictoryPhase {
@@ -205,12 +218,21 @@ export interface CombatView extends BaseGameView {
   readonly smashAvailable: boolean;
   readonly heldItem: 'HEAL' | null;
   readonly scrollsRemaining: number;
+  readonly stealAvailable: boolean;
 }
 
 export interface SpellSelectView extends BaseGameView {
   readonly kind: 'spell-select';
   readonly enemyName: 'GHOUL' | 'SKELETON KNIGHT';
   readonly scrolls: Readonly<Record<'FIREBALL' | 'LIGHTNING' | 'STUN', number>>;
+}
+
+export interface LootSelectView extends BaseGameView {
+  readonly kind: 'loot-select';
+  readonly itemName: 'GHOUL FANG' | 'BONE MAIL';
+  readonly slot: 'WEAPON' | 'ARMOR';
+  readonly bonus: '+1 POWER' | '+1 DEFENSE';
+  readonly equippedName: 'GHOUL FANG' | 'BONE MAIL';
 }
 
 export interface VictoryView extends BaseGameView {
@@ -236,6 +258,7 @@ export type GameView =
   | ExplorationView
   | CombatView
   | SpellSelectView
+  | LootSelectView
   | VictoryView
   | DeathView;
 
@@ -255,7 +278,7 @@ export interface RollSidePresentation {
 
 export interface OpposedRollPresentation {
   readonly kind: 'opposed-roll';
-  readonly purpose: 'initiative' | 'attack' | 'run' | 'spell';
+  readonly purpose: 'initiative' | 'attack' | 'run' | 'spell' | 'steal';
   readonly prompt: string;
   readonly left: RollSidePresentation;
   readonly right: RollSidePresentation;

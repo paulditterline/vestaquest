@@ -1,6 +1,8 @@
 import { createRng } from './rng.js';
 import {
   ENEMIES,
+  ENEMY_STEAL_LOOT,
+  EQUIPMENT,
   HERO_STARTING_STATS,
   advanceHeroForRooms,
   type SpellAffinity,
@@ -11,6 +13,7 @@ import {
   rollLightning,
   rollRun,
   rollSmash,
+  rollSteal,
   rollStun,
   type OpposedRoll,
 } from './combat.js';
@@ -37,6 +40,8 @@ import {
   type CombatantName,
   type CombatPhase,
   type DungeonRunState,
+  type Equipment,
+  type EquipmentItemId,
   type ExplorationPhase,
   type GameChoice,
   type GameCommand,
@@ -59,6 +64,10 @@ const STARTING_SCROLL_POUCH = Object.freeze([
   'lightning',
   'stun',
 ] as const);
+const EMPTY_EQUIPMENT: Equipment = Object.freeze({
+  weapon: null,
+  armor: null,
+});
 
 type TransitionResult = Pick<RunState, 'phase' | 'rng'> &
   Readonly<{ presentations?: readonly GamePresentation[] }>;
@@ -132,6 +141,32 @@ export function deriveView(state: RunState): GameView {
     case 'combat': {
       const encounter = activeEncounter(state.phase);
       const enemy = ENEMIES[encounter.enemyId];
+      if (state.phase.menu === 'loot') {
+        if (state.phase.pendingLoot === null) {
+          throw new Error('Loot selection requires pending loot.');
+        }
+        const loot = EQUIPMENT[state.phase.pendingLoot];
+        const equipped = state.phase.equipment[loot.slot];
+        if (equipped === null) {
+          throw new Error(
+            'Loot selection requires an occupied equipment slot.',
+          );
+        }
+        return Object.freeze({
+          ...base,
+          kind: 'loot-select',
+          itemName: loot.name,
+          slot: loot.slot.toUpperCase() as 'WEAPON' | 'ARMOR',
+          bonus:
+            `${loot.bonus > 0 ? '+' : ''}${loot.bonus} ${loot.stat.toUpperCase()}` as
+              '+1 POWER' | '+1 DEFENSE',
+          equippedName: EQUIPMENT[equipped].name,
+          choices: freezeChoices([
+            { id: CHOICE_IDS.equipLoot, number: 1, label: 'EQUIP' },
+            { id: CHOICE_IDS.leaveLoot, number: 2, label: 'LEAVE' },
+          ]),
+        });
+      }
       if (state.phase.menu === 'spells') {
         const counts = scrollCounts(state.phase.scrollPouch);
         const spellChoices = SCROLL_IDS.flatMap((scroll) =>
@@ -177,6 +212,13 @@ export function deriveView(state: RunState): GameView {
           label: 'SMASH',
         });
       }
+      if (state.phase.heroClass === 'rogue' && !state.phase.stealUsed) {
+        choices.push({
+          id: CHOICE_IDS.steal,
+          number: choices.length + 1,
+          label: 'STEAL',
+        });
+      }
       if (
         state.phase.heroClass === 'wizard' &&
         state.phase.scrollPouch.length > 0
@@ -217,6 +259,8 @@ export function deriveView(state: RunState): GameView {
           state.phase.heroClass === 'warrior' && !state.phase.smashUsed,
         heldItem: state.phase.consumable === null ? null : 'HEAL',
         scrollsRemaining: state.phase.scrollPouch.length,
+        stealAvailable:
+          state.phase.heroClass === 'rogue' && !state.phase.stealUsed,
         choices: freezeChoices(choices),
       });
     }
@@ -374,6 +418,7 @@ function transitionFromChoice(
               ...encounter,
               currentHp: ENEMIES[encounter.enemyId].maximumHp,
               status: 'active' as const,
+              stealUsed: false,
             }),
           ),
         ),
@@ -386,6 +431,7 @@ function transitionFromChoice(
           consumable: 'healing-draught',
           scrollPouch:
             heroClass === 'wizard' ? STARTING_SCROLL_POUCH : Object.freeze([]),
+          equipment: EMPTY_EQUIPMENT,
           enemiesSlain: 0,
           dungeon,
         }),
@@ -513,6 +559,7 @@ function enterCombat(
     stats: phase.stats,
     consumable: phase.consumable,
     scrollPouch: phase.scrollPouch,
+    equipment: phase.equipment,
     enemiesSlain: phase.enemiesSlain,
     dungeon: phase.dungeon,
     encounterRoomId,
@@ -521,7 +568,9 @@ function enterCombat(
     initiativeWinner: initiative.winner,
     enemyHasActed: initiative.winner === 'enemy',
     smashUsed: false,
+    stealUsed: encounter.stealUsed,
     menu: 'actions',
+    pendingLoot: null,
   });
   const initiativePresentation = makeRollPresentation({
     purpose: 'initiative',
@@ -559,6 +608,15 @@ function transitionCombat(
   choiceId: ChoiceId,
   rng: RunState['rng'],
 ): TransitionResult {
+  if (phase.menu === 'loot') {
+    if (
+      choiceId !== CHOICE_IDS.equipLoot &&
+      choiceId !== CHOICE_IDS.leaveLoot
+    ) {
+      throw new Error('Loot selection requires Equip or Leave.');
+    }
+    return resolveLootChoice(phase, choiceId === CHOICE_IDS.equipLoot, rng);
+  }
   if (phase.menu === 'spells') {
     if (choiceId === CHOICE_IDS.cancelSpell) {
       return {
@@ -577,6 +635,8 @@ function transitionCombat(
         throw new Error('Smash is not available.');
       }
       return resolveHeroAttack(phase, rng, true);
+    case CHOICE_IDS.steal:
+      return resolveRogueSteal(phase, rng);
     case CHOICE_IDS.spell:
       if (phase.heroClass !== 'wizard' || phase.scrollPouch.length === 0) {
         throw new Error('Spell casting is not available.');
@@ -648,6 +708,7 @@ function transitionCombat(
           stats: phase.stats,
           consumable: phase.consumable,
           scrollPouch: phase.scrollPouch,
+          equipment: phase.equipment,
           enemiesSlain: phase.enemiesSlain,
           dungeon: Object.freeze({
             ...phase.dungeon,
@@ -661,6 +722,112 @@ function transitionCombat(
     default:
       throw new Error(`Choice ${choiceId} is not a combat action.`);
   }
+}
+
+function resolveRogueSteal(
+  phase: CombatPhase,
+  rng: RunState['rng'],
+): TransitionResult {
+  if (phase.heroClass !== 'rogue' || phase.stealUsed) {
+    throw new Error('Steal is not available.');
+  }
+  const encounter = activeEncounter(phase);
+  const enemy = ENEMIES[encounter.enemyId];
+  const unaware = phase.initiativeWinner === 'hero' && !phase.enemyHasActed;
+  const result = rollSteal(rng, phase.stats.skill, enemy.skill, unaware);
+  const dungeon = updateEncounter(phase.dungeon, encounter.roomId, {
+    stealUsed: true,
+  });
+  const attemptedPhase: CombatPhase = Object.freeze({
+    ...phase,
+    dungeon,
+    stealUsed: true,
+    menu: 'actions',
+    pendingLoot: null,
+  });
+  const lootId = ENEMY_STEAL_LOOT[encounter.enemyId];
+  const loot = EQUIPMENT[lootId];
+  const presentation = makeRollPresentation({
+    purpose: 'steal',
+    prompt: unaware ? 'UNAWARE! ROGUE STEALS' : 'ROGUE ATTEMPTS STEAL',
+    leftName: 'ROGUE',
+    leftStat: 'S',
+    leftDiceLabel: 'D6',
+    leftDice: [result.roll.leftDie],
+    rightName: enemy.name,
+    rightStat: 'S',
+    rightDiceLabel: 'D6',
+    rightDice: [result.roll.rightDie],
+    roll: result.roll,
+    verdict: result.stolen ? `STOLE ${loot.name}` : 'STEAL FAILED',
+  });
+
+  if (!result.stolen) {
+    const counter = resolveEnemyTurn(attemptedPhase, result.rng);
+    return {
+      ...counter,
+      presentations: Object.freeze([
+        presentation,
+        ...(counter.presentations ?? NO_PRESENTATIONS),
+      ]),
+    };
+  }
+
+  if (phase.equipment[loot.slot] !== null) {
+    return {
+      phase: Object.freeze({
+        ...attemptedPhase,
+        menu: 'loot',
+        pendingLoot: lootId,
+      }),
+      rng: result.rng,
+      presentations: Object.freeze([presentation]),
+    };
+  }
+
+  const counter = resolveEnemyTurn(
+    equipItem(attemptedPhase, lootId),
+    result.rng,
+  );
+  return {
+    ...counter,
+    presentations: Object.freeze([
+      presentation,
+      ...(counter.presentations ?? NO_PRESENTATIONS),
+    ]),
+  };
+}
+
+function resolveLootChoice(
+  phase: CombatPhase,
+  equip: boolean,
+  rng: RunState['rng'],
+): TransitionResult {
+  if (phase.pendingLoot === null) {
+    throw new Error('No stolen loot is awaiting a decision.');
+  }
+  const resolved = equip
+    ? equipItem(phase, phase.pendingLoot)
+    : Object.freeze({
+        ...phase,
+        menu: 'actions' as const,
+        pendingLoot: null,
+      });
+  return resolveEnemyTurn(resolved, rng);
+}
+
+function equipItem(phase: CombatPhase, itemId: EquipmentItemId): CombatPhase {
+  const item = EQUIPMENT[itemId];
+  const previousId = phase.equipment[item.slot];
+  const previousBonus = previousId === null ? 0 : EQUIPMENT[previousId].bonus;
+  const statValue = phase.stats[item.stat] - previousBonus + item.bonus;
+  return Object.freeze({
+    ...phase,
+    stats: Object.freeze({ ...phase.stats, [item.stat]: statValue }),
+    equipment: Object.freeze({ ...phase.equipment, [item.slot]: itemId }),
+    menu: 'actions',
+    pendingLoot: null,
+  });
 }
 
 function resolveWizardScroll(
@@ -800,6 +967,7 @@ function resolveDamageSpell(
         stats: phase.stats,
         consumable: phase.consumable,
         scrollPouch: phase.scrollPouch,
+        equipment: phase.equipment,
         enemiesSlain: phase.enemiesSlain + 1,
         dungeon,
       }),
@@ -902,6 +1070,7 @@ function resolveHeroAttack(
         stats: phase.stats,
         consumable: phase.consumable,
         scrollPouch: phase.scrollPouch,
+        equipment: phase.equipment,
         enemiesSlain: phase.enemiesSlain + 1,
         dungeon,
       }),
@@ -975,6 +1144,7 @@ function resolveEnemyTurn(
       stats: Object.freeze({ ...phase.stats, hp: heroHp }),
       enemyHasActed: true,
       menu: 'actions',
+      pendingLoot: null,
     }),
     rng: result.rng,
     presentations: Object.freeze([presentation]),
@@ -1013,7 +1183,14 @@ function activeEncounter(phase: CombatPhase) {
 function updateEncounter(
   dungeon: DungeonRunState,
   roomId: string,
-  update: Readonly<{ currentHp: number; status: 'active' | 'resolved' }>,
+  update: Readonly<
+    Partial<
+      Pick<
+        DungeonRunState['encounters'][number],
+        'currentHp' | 'status' | 'stealUsed'
+      >
+    >
+  >,
 ): DungeonRunState {
   return Object.freeze({
     ...dungeon,
@@ -1205,7 +1382,7 @@ function rollDisplayName(name: CombatantName): string {
 
 function makeRollPresentation(
   input: Readonly<{
-    purpose: 'initiative' | 'attack' | 'run' | 'spell';
+    purpose: 'initiative' | 'attack' | 'run' | 'spell' | 'steal';
     prompt: string;
     leftName: 'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT';
     leftStat: 'P' | 'D' | 'S';

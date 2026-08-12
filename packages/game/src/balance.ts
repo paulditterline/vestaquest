@@ -1,4 +1,4 @@
-import type { HeroClass, ScrollId } from './types.js';
+import type { EquipmentItemId, HeroClass, ScrollId } from './types.js';
 
 export const MAXIMUM_LEVEL = 3 as const;
 export const MAXIMUM_HERO_HP = 5 as const;
@@ -28,6 +28,38 @@ export type EnemyDefinition = Readonly<{
 
 export type SpellAffinity =
   'normal' | 'weak' | 'resistant' | 'immune' | 'healed';
+
+export type EquipmentDefinition = Readonly<{
+  id: EquipmentItemId;
+  name: 'GHOUL FANG' | 'BONE MAIL';
+  slot: 'weapon' | 'armor';
+  stat: 'power' | 'defense';
+  bonus: 1;
+}>;
+
+export const EQUIPMENT: Readonly<Record<EquipmentItemId, EquipmentDefinition>> =
+  Object.freeze({
+    'ghoul-fang': Object.freeze({
+      id: 'ghoul-fang',
+      name: 'GHOUL FANG',
+      slot: 'weapon',
+      stat: 'power',
+      bonus: 1,
+    }),
+    'bone-mail': Object.freeze({
+      id: 'bone-mail',
+      name: 'BONE MAIL',
+      slot: 'armor',
+      stat: 'defense',
+      bonus: 1,
+    }),
+  });
+
+export const ENEMY_STEAL_LOOT: Readonly<Record<EnemyId, EquipmentItemId>> =
+  Object.freeze({
+    ghoul: 'ghoul-fang',
+    'skeleton-knight': 'bone-mail',
+  });
 
 export const HERO_STARTING_STATS: Readonly<Record<HeroClass, HeroStats>> =
   Object.freeze({

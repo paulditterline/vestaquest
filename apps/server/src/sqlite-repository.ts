@@ -540,6 +540,7 @@ function parseGamePresentation(value: unknown): GamePresentation {
       'attack',
       'run',
       'spell',
+      'steal',
     ] as const),
     prompt,
     left: parseRollSide(presentation.left),
@@ -630,6 +631,7 @@ function parseGameView(value: unknown): GameView {
     'exploration',
     'combat',
     'spell-select',
+    'loot-select',
     'victory',
     'death',
   ] as const);
@@ -739,6 +741,7 @@ function parseGameView(value: unknown): GameView {
         'smashAvailable',
         'heldItem',
         'scrollsRemaining',
+        'stealAvailable',
       ]);
       const enemyId = requireEnum(view.enemyId, [
         'ghoul',
@@ -782,6 +785,10 @@ function parseGameView(value: unknown): GameView {
         scrollsRemaining: requireNonnegativeInteger(
           view.scrollsRemaining,
           'scrolls remaining',
+        ),
+        stealAvailable: requireBoolean(
+          view.stealAvailable,
+          'steal availability',
         ),
       });
     }
@@ -832,6 +839,40 @@ function parseGameView(value: unknown): GameView {
         kind,
         enemyName,
         scrolls: parsedScrolls,
+      });
+    }
+    case 'loot-select': {
+      requireKeys(view, [
+        'id',
+        'revision',
+        'choices',
+        'kind',
+        'itemName',
+        'slot',
+        'bonus',
+        'equippedName',
+      ]);
+      if (
+        !isDeepStrictEqual(choices, [
+          { id: 'loot.equip', number: 1, label: 'EQUIP' },
+          { id: 'loot.leave', number: 2, label: 'LEAVE' },
+        ])
+      ) {
+        throw new PersistenceCorruptionError('loot choices');
+      }
+      return Object.freeze({
+        ...base,
+        kind,
+        itemName: requireEnum(view.itemName, [
+          'GHOUL FANG',
+          'BONE MAIL',
+        ] as const),
+        slot: requireEnum(view.slot, ['WEAPON', 'ARMOR'] as const),
+        bonus: requireEnum(view.bonus, ['+1 POWER', '+1 DEFENSE'] as const),
+        equippedName: requireEnum(view.equippedName, [
+          'GHOUL FANG',
+          'BONE MAIL',
+        ] as const),
       });
     }
     case 'victory':
@@ -915,12 +956,15 @@ function parseChoices(value: unknown) {
           'action.item',
           'combat.attack',
           'combat.smash',
+          'combat.steal',
           'combat.spell',
           'combat.run',
           'spell.fireball',
           'spell.lightning',
           'spell.stun',
           'spell.cancel',
+          'loot.equip',
+          'loot.leave',
         ] as const),
         number: requirePositiveInteger(record.number, 'choice number'),
         label: requireString(record.label),
