@@ -4,8 +4,10 @@ import {
   damageForMargin,
   rollAttack,
   rollInitiative,
+  rollLightning,
   rollRun,
   rollSmash,
+  rollStun,
 } from '../src/index.js';
 
 describe('approved opposed combat rolls', () => {
@@ -51,6 +53,26 @@ describe('approved opposed combat rolls', () => {
       discardedDie: 2,
       roll: { leftDie: 4, leftModifier: 5, rightModifier: 4 },
       rng: { draws: 3 },
+    });
+  });
+
+  it('rolls two dice and keeps the higher die for Lightning', () => {
+    expect(rollLightning(createRng(1), 5, 4)).toMatchObject({
+      keptDie: 4,
+      discardedDie: 2,
+      roll: { leftDie: 4, leftModifier: 5, rightModifier: 4 },
+      rng: { draws: 3 },
+    });
+  });
+
+  it('requires a strict opposed-roll win to Stun', () => {
+    expect(rollStun(createRng(1), 5, 3)).toMatchObject({
+      stunned: true,
+      rng: { draws: 2 },
+    });
+    expect(rollStun(createRng(257), 2, 3)).toMatchObject({
+      roll: { leftTotal: 8, rightTotal: 8 },
+      stunned: false,
     });
   });
 });

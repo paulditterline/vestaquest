@@ -1,6 +1,6 @@
 # VestaQuest implementation plan
 
-Status: Slices 0–5 complete; approved Slice 5 branch awaiting merge
+Status: Slices 0–5 complete and merged; Slice 6 active
 
 Last updated: 2026-08-11
 
@@ -83,11 +83,11 @@ Why this shape: a long-running server suits authoritative sessions, credential c
 
 The stack is an engineering decision based on the platform constraints; the owner is not expected to choose framework plumbing. Slice 1 pins Node 22.23.1 for development/CI and TypeScript 6.0.x for compatibility with the current typed linting toolchain. Fastify and SQLite will be added only when the authoritative session slice needs them.
 
-### Gate B — signature physical transition, resolved 2026-08-09
+### Gate B — signature physical transition, resolved 2026-08-09; superseded 2026-08-11
 
-Decision: use the Cloud API's `wave` transition at `fast` speed for opposed-roll scaffold/result sequences. The application must read the owner's current transition preference, apply Wave/Fast only for the reveal, and restore the original preference afterward.
+Current decision: preserve the owner's ordinary transition for every frame and do not change the device preference during opposed-roll sequences. Final Slice 5 physical review on 2026-08-11 superseded the earlier Wave/Fast experiment below. Staged per-die reveals and Local API column behavior remain optional later work.
 
-Physical findings:
+Earlier physical findings retained for context:
 
 - Classic/Gentle kept unchanged cells still but introduced the roll tiles, result numbers, and verdict effectively together.
 - Wave/Gentle produced the intended left-to-right spatial order but felt too slow.
@@ -491,7 +491,7 @@ Acceptance:
 
 ### Slice 5 — core combat and death
 
-Status: **Complete**. Gate D and final owner visual/physical review were approved on 2026-08-11; merge remains.
+Status: **Complete and merged**. Gate D and final owner visual/physical review were approved on 2026-08-11.
 
 Branch: `codex/core-combat`
 
@@ -519,6 +519,8 @@ Acceptance:
 ### Slice 6 — class identity, equipment, and progression
 
 Branch: `codex/classes-and-loot`
+
+Status: **Active**. The first playable feature implements the Wizard's three-scroll pouch, spell submenu, Fireball/Lightning/Stun resolution, initial Ghoul and Skeleton Knight affinities, exact board views, persistence, and controller flow. Automated verification and owner Board Lab review passed on 2026-08-12. Rogue Steal/Unaware is next.
 
 Build:
 
@@ -648,9 +650,9 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Merge the approved Slice 5 core combat branch, `codex/core-combat`.
-2. Begin Slice 6 class actions, equipment, and progression with Wizard Fireball,
-   Lightning, and Stun scrolls as the first playable feature.
+1. Merge the approved Wizard scroll feature PR.
+2. Continue Slice 6 with Rogue Steal/Unaware.
+3. Add compact equipment and loot flows.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed

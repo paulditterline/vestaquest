@@ -4,8 +4,8 @@ import type { EnemyId } from './balance.js';
 import type { OpposedRoll } from './combat.js';
 import type { Direction, RoomId } from './topology.js';
 
-export const GAME_STATE_VERSION = 3 as const;
-export const GAME_RULES_VERSION = 'core-combat-v1' as const;
+export const GAME_STATE_VERSION = 4 as const;
+export const GAME_RULES_VERSION = 'wizard-scrolls-v1' as const;
 
 export const HERO_CLASSES = ['warrior', 'rogue', 'wizard'] as const;
 export type HeroClass = (typeof HERO_CLASSES)[number];
@@ -21,6 +21,11 @@ export const CHOICE_IDS = {
   item: 'action.item',
   attack: 'combat.attack',
   smash: 'combat.smash',
+  spell: 'combat.spell',
+  fireball: 'spell.fireball',
+  lightning: 'spell.lightning',
+  stun: 'spell.stun',
+  cancelSpell: 'spell.cancel',
   run: 'combat.run',
 } as const;
 
@@ -34,6 +39,10 @@ export interface ChooseCommand {
 }
 
 export type GameCommand = ChooseCommand;
+
+export const SCROLL_IDS = ['fireball', 'lightning', 'stun'] as const;
+export type ScrollId = (typeof SCROLL_IDS)[number];
+export type ScrollPouch = readonly ScrollId[];
 
 export interface ClassSelectPhase {
   readonly kind: 'class-select';
@@ -60,6 +69,7 @@ export interface ExplorationPhase {
   readonly heroClass: HeroClass;
   readonly stats: HeroStats;
   readonly consumable: 'healing-draught' | null;
+  readonly scrollPouch: ScrollPouch;
   readonly enemiesSlain: number;
   readonly dungeon: DungeonRunState;
 }
@@ -69,6 +79,7 @@ export interface CombatPhase {
   readonly heroClass: HeroClass;
   readonly stats: HeroStats;
   readonly consumable: 'healing-draught' | null;
+  readonly scrollPouch: ScrollPouch;
   readonly enemiesSlain: number;
   readonly dungeon: DungeonRunState;
   readonly encounterRoomId: RoomId;
@@ -77,6 +88,7 @@ export interface CombatPhase {
   readonly initiativeWinner: 'hero' | 'enemy';
   readonly enemyHasActed: boolean;
   readonly smashUsed: boolean;
+  readonly menu: 'actions' | 'spells';
 }
 
 export interface VictoryPhase {
@@ -192,6 +204,13 @@ export interface CombatView extends BaseGameView {
   readonly enemyMaximumHp: number;
   readonly smashAvailable: boolean;
   readonly heldItem: 'HEAL' | null;
+  readonly scrollsRemaining: number;
+}
+
+export interface SpellSelectView extends BaseGameView {
+  readonly kind: 'spell-select';
+  readonly enemyName: 'GHOUL' | 'SKELETON KNIGHT';
+  readonly scrolls: Readonly<Record<'FIREBALL' | 'LIGHTNING' | 'STUN', number>>;
 }
 
 export interface VictoryView extends BaseGameView {
@@ -213,7 +232,12 @@ export interface DeathView extends BaseGameView {
 }
 
 export type GameView =
-  ClassSelectView | ExplorationView | CombatView | VictoryView | DeathView;
+  | ClassSelectView
+  | ExplorationView
+  | CombatView
+  | SpellSelectView
+  | VictoryView
+  | DeathView;
 
 export type CombatantName =
   'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT';
@@ -231,7 +255,7 @@ export interface RollSidePresentation {
 
 export interface OpposedRollPresentation {
   readonly kind: 'opposed-roll';
-  readonly purpose: 'initiative' | 'attack' | 'run';
+  readonly purpose: 'initiative' | 'attack' | 'run' | 'spell';
   readonly prompt: string;
   readonly left: RollSidePresentation;
   readonly right: RollSidePresentation;

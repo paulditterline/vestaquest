@@ -9,6 +9,7 @@ import type {
   HeroClass,
   OpposedRollPresentation,
   RollSidePresentation,
+  SpellSelectView,
   TitlePresentation,
   VictoryView,
 } from '@vestaquest/game';
@@ -191,6 +192,39 @@ export function renderCombatView(
   return layout;
 }
 
+export function renderSpellSelectView(view: SpellSelectView): FlagshipLayout {
+  const choices = requireNumberedChoices(view.choices, view.choices.length);
+  if (choices.length < 1 || choices.length > 4) {
+    throw new RangeError('Scroll selection requires one through four choices.');
+  }
+  if (choices.at(-1)?.label !== 'CANCEL') {
+    throw new TypeError('Scroll selection must end with Cancel.');
+  }
+  let layout = writeText(createFlagshipLayout(), 'SCROLL POUCH', {
+    row: 0,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
+  layout = writeText(layout, `VS ${view.enemyName}`, {
+    row: 1,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
+  for (const [index, choice] of choices.entries()) {
+    const count =
+      choice.label === 'CANCEL'
+        ? ''
+        : ` X${view.scrolls[choice.label as keyof typeof view.scrolls]}`;
+    layout = writeText(layout, `${choice.number} ${choice.label}${count}`, {
+      row: index + 2,
+      column: 0,
+    });
+  }
+  return layout;
+}
+
 export function renderOpposedRollScaffold(
   presentation: OpposedRollPresentation,
 ): FlagshipLayout {
@@ -270,6 +304,8 @@ export function renderGameView(
       return renderExplorationView(view, shell);
     case 'combat':
       return renderCombatView(view, shell);
+    case 'spell-select':
+      return renderSpellSelectView(view);
     case 'victory':
       return renderVictoryView(view);
     case 'death':

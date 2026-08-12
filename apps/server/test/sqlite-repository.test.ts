@@ -141,6 +141,60 @@ describe('SqliteSessionRepository', () => {
     await restarted.close();
   });
 
+  it('replays a Wizard encounter and its Spell choice after restart', async () => {
+    const path = await databasePath();
+    const repository = new SqliteSessionRepository(path);
+    const service = serviceFor(repository, 'wizard', 10);
+    const created = await service.createSession();
+    await service.acknowledgeDisplayed(created.sessionId, 0);
+
+    for (const [key, choice] of [
+      ['class', 3],
+      ['north', 1],
+      ['north-again', 1],
+      ['enter-fight', 2],
+    ] as const) {
+      const current = await service.getSession(created.sessionId);
+      await service.acknowledgeDisplayed(
+        created.sessionId,
+        current.view.version,
+      );
+      await service.submitCommand(
+        command(created.sessionId, key, current.view.version, choice),
+      );
+    }
+    await repository.close();
+
+    const restarted = new SqliteSessionRepository(path);
+    const resumed = await serviceFor(restarted, 'resumed').getSession(
+      created.sessionId,
+    );
+    expect(resumed.view).toMatchObject({
+      version: 4,
+      kind: 'combat',
+      display: { status: 'locked' },
+    });
+    const intents = await restarted.listPresentationIntents(created.sessionId);
+    const finalPayload = intents.at(-1)?.payload;
+    expect(finalPayload).toMatchObject({
+      kind: 'game-view',
+      view: {
+        kind: 'combat',
+        scrollsRemaining: 3,
+      },
+    });
+    if (
+      finalPayload?.kind !== 'game-view' ||
+      finalPayload.view.kind !== 'combat'
+    ) {
+      throw new Error('Expected a persisted combat game view.');
+    }
+    expect(
+      finalPayload.view.choices.find(({ id }) => id === 'combat.spell'),
+    ).toMatchObject({ label: 'SPELL' });
+    await restarted.close();
+  });
+
   it('returns the original idempotency receipt after restart', async () => {
     const path = await databasePath();
     const firstRepository = new SqliteSessionRepository(path);
