@@ -35,6 +35,12 @@ export type RunResult = Readonly<{
   rng: RngState;
 }>;
 
+export type StunResult = Readonly<{
+  roll: OpposedRoll;
+  stunned: boolean;
+  rng: RngState;
+}>;
+
 export function rollInitiative(
   rng: RngState,
   heroSkill: number,
@@ -66,7 +72,36 @@ export function rollSmash(
   warriorPower: number,
   defenderDefense: number,
 ): SmashResult {
-  assertModifier(warriorPower);
+  return rollKeepHighAttack(rng, warriorPower, defenderDefense);
+}
+
+export function rollLightning(
+  rng: RngState,
+  wizardPower: number,
+  defenderDefense: number,
+): SmashResult {
+  return rollKeepHighAttack(rng, wizardPower, defenderDefense);
+}
+
+export function rollStun(
+  rng: RngState,
+  wizardPower: number,
+  enemySkill: number,
+): StunResult {
+  const result = rollOpposed(rng, wizardPower, enemySkill);
+  return Object.freeze({
+    roll: result.roll,
+    stunned: result.roll.leftTotal > result.roll.rightTotal,
+    rng: result.rng,
+  });
+}
+
+function rollKeepHighAttack(
+  rng: RngState,
+  attackerPower: number,
+  defenderDefense: number,
+): SmashResult {
+  assertModifier(attackerPower);
   assertModifier(defenderDefense);
   const first = rollDie(rng, 6);
   const second = rollDie(first.state, 6);
@@ -75,7 +110,7 @@ export function rollSmash(
   const discardedDie = Math.min(first.value, second.value);
   const roll = freezeOpposed(
     keptDie,
-    warriorPower,
+    attackerPower,
     defense.value,
     defenderDefense,
   );

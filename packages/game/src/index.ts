@@ -14,13 +14,20 @@ export {
   advanceHeroForRooms,
   targetLevelForRooms,
 } from './balance.js';
-export type { EnemyDefinition, EnemyId, HeroStats } from './balance.js';
+export type {
+  EnemyDefinition,
+  EnemyId,
+  HeroStats,
+  SpellAffinity,
+} from './balance.js';
 export {
   damageForMargin,
   rollAttack,
   rollInitiative,
+  rollLightning,
   rollRun,
   rollSmash,
+  rollStun,
 } from './combat.js';
 export type {
   AttackResult,
@@ -28,6 +35,7 @@ export type {
   OpposedRoll,
   RunResult,
   SmashResult,
+  StunResult,
 } from './combat.js';
 export { placeCoreEncounters, shortestRoomPath } from './encounters.js';
 export type { EncounterPlacement, PlacedEncounter } from './encounters.js';
@@ -49,6 +57,7 @@ export {
   GAME_RULES_VERSION,
   GAME_STATE_VERSION,
   HERO_CLASSES,
+  SCROLL_IDS,
 } from './types.js';
 export type {
   AcceptedCommandEntry,
@@ -81,6 +90,9 @@ export type {
   RunPhase,
   RunState,
   RollSidePresentation,
+  ScrollId,
+  ScrollPouch,
+  SpellSelectView,
   TitlePresentation,
   VictoryPhase,
   VictoryView,

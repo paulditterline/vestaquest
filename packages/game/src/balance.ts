@@ -1,4 +1,4 @@
-import type { HeroClass } from './types.js';
+import type { HeroClass, ScrollId } from './types.js';
 
 export const MAXIMUM_LEVEL = 3 as const;
 export const MAXIMUM_HERO_HP = 5 as const;
@@ -23,7 +23,11 @@ export type EnemyDefinition = Readonly<{
   defense: number;
   skill: number;
   trait: 'feed' | 'armored';
+  spellAffinities: Readonly<Record<ScrollId, SpellAffinity>>;
 }>;
+
+export type SpellAffinity =
+  'normal' | 'weak' | 'resistant' | 'immune' | 'healed';
 
 export const HERO_STARTING_STATS: Readonly<Record<HeroClass, HeroStats>> =
   Object.freeze({
@@ -66,6 +70,11 @@ export const ENEMIES: Readonly<Record<EnemyId, EnemyDefinition>> =
       defense: 2,
       skill: 3,
       trait: 'feed',
+      spellAffinities: Object.freeze({
+        fireball: 'weak',
+        lightning: 'normal',
+        stun: 'normal',
+      }),
     }),
     'skeleton-knight': Object.freeze({
       id: 'skeleton-knight',
@@ -75,6 +84,11 @@ export const ENEMIES: Readonly<Record<EnemyId, EnemyDefinition>> =
       defense: 4,
       skill: 2,
       trait: 'armored',
+      spellAffinities: Object.freeze({
+        fireball: 'resistant',
+        lightning: 'weak',
+        stun: 'normal',
+      }),
     }),
   });
 

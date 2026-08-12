@@ -68,6 +68,13 @@ function escapeCrookedHalls(seed = 10): RunState {
   return state;
 }
 
+function enterWizardCombat(): RunState {
+  let state = beginExploration(10, CHOICE_IDS.wizard);
+  state = accept(state, 'wizard-north', CHOICE_IDS.north);
+  state = accept(state, 'wizard-north-again', CHOICE_IDS.north);
+  return accept(state, 'wizard-east', CHOICE_IDS.east);
+}
+
 describe('map exploration game kernel', () => {
   it('creates a class-select state and a separate title presentation', () => {
     const state = createRun(0x1234abcd);
@@ -360,6 +367,127 @@ describe('map exploration game kernel', () => {
       },
       { kind: 'opposed-roll', prompt: 'GHOUL ATTACKS' },
     ]);
+  });
+
+  it('opens and cancels the Wizard scroll pouch without consuming a scroll', () => {
+    let state = enterWizardCombat();
+    state = accept(state, 'open-spells', CHOICE_IDS.spell);
+    expect(deriveView(state)).toMatchObject({
+      kind: 'spell-select',
+      scrolls: { FIREBALL: 1, LIGHTNING: 1, STUN: 1 },
+      choices: [
+        { id: CHOICE_IDS.fireball, number: 1, label: 'FIREBALL' },
+        { id: CHOICE_IDS.lightning, number: 2, label: 'LIGHTNING' },
+        { id: CHOICE_IDS.stun, number: 3, label: 'STUN' },
+        { id: CHOICE_IDS.cancelSpell, number: 4, label: 'CANCEL' },
+      ],
+    });
+
+    state = accept(state, 'cancel-spells', CHOICE_IDS.cancelSpell);
+    expect(state.phase).toMatchObject({
+      kind: 'combat',
+      menu: 'actions',
+      scrollPouch: ['fireball', 'lightning', 'stun'],
+    });
+    expect(deriveView(state)).toMatchObject({
+      kind: 'combat',
+      scrollsRemaining: 3,
+    });
+  });
+
+  it('consumes Fireball and exploits the Ghoul weakness', () => {
+    let state = enterWizardCombat();
+    state = accept(state, 'open-spells', CHOICE_IDS.spell);
+    const cast = choose(state, 'cast-fireball', CHOICE_IDS.fireball);
+    if (cast.status !== 'accepted') throw new Error('Expected Fireball cast.');
+    expect(cast.presentations).toMatchObject([
+      {
+        kind: 'opposed-roll',
+        purpose: 'spell',
+        prompt: 'WIZARD CASTS FIREBALL',
+        verdict: 'WEAK! GHOUL SLAIN',
+      },
+    ]);
+    expect(cast.state.phase).toMatchObject({
+      kind: 'exploration',
+      scrollPouch: ['lightning', 'stun'],
+      enemiesSlain: 1,
+    });
+  });
+
+  it('uses Lightning keep-high against a Skeleton Knight weakness', () => {
+    const entered = enterWizardCombat();
+    if (entered.phase.kind !== 'combat') throw new Error('Expected combat.');
+    const encounterRoomId = entered.phase.encounterRoomId;
+    const skeleton: RunState = {
+      ...entered,
+      rng: createRng(1),
+      phase: {
+        ...entered.phase,
+        dungeon: {
+          ...entered.phase.dungeon,
+          encounters: entered.phase.dungeon.encounters.map((encounter) =>
+            encounter.roomId === encounterRoomId
+              ? {
+                  ...encounter,
+                  enemyId: 'skeleton-knight',
+                  currentHp: 3,
+                }
+              : encounter,
+          ),
+        },
+      },
+    };
+    const opened = accept(skeleton, 'open-spells', CHOICE_IDS.spell);
+    const cast = choose(opened, 'cast-lightning', CHOICE_IDS.lightning);
+    if (cast.status !== 'accepted') throw new Error('Expected Lightning cast.');
+    const spell = cast.presentations[0];
+    expect(spell).toMatchObject({
+      kind: 'opposed-roll',
+      purpose: 'spell',
+      prompt: 'WIZARD CASTS LIGHTNING',
+      left: { diceLabel: '2D6', dice: [4, 2] },
+      verdict: 'WEAK! HIT: 2',
+    });
+    expect(cast.state.phase).toMatchObject({
+      kind: 'combat',
+      scrollPouch: ['fireball', 'stun'],
+    });
+    if (cast.state.phase.kind !== 'combat') throw new Error('Expected combat.');
+    expect(
+      cast.state.phase.dungeon.encounters.find(
+        ({ roomId }) => roomId === encounterRoomId,
+      ),
+    ).toMatchObject({ currentHp: 1, status: 'active' });
+  });
+
+  it('lets a successful Stun skip the enemy response', () => {
+    const entered = enterWizardCombat();
+    if (entered.phase.kind !== 'combat') throw new Error('Expected combat.');
+    const controlled: RunState = { ...entered, rng: createRng(1) };
+    const opened = accept(controlled, 'open-spells', CHOICE_IDS.spell);
+    const cast = choose(opened, 'cast-stun', CHOICE_IDS.stun);
+    if (cast.status !== 'accepted') throw new Error('Expected Stun cast.');
+    expect(cast.presentations).toMatchObject([
+      {
+        kind: 'opposed-roll',
+        purpose: 'spell',
+        prompt: 'WIZARD CASTS STUN',
+        verdict: 'GHOUL STUNNED',
+      },
+    ]);
+    expect(cast.state.phase).toMatchObject({
+      kind: 'combat',
+      menu: 'actions',
+      scrollPouch: ['fireball', 'lightning'],
+    });
+    if (cast.state.phase.kind !== 'combat') throw new Error('Expected combat.');
+    const encounterRoomId = cast.state.phase.encounterRoomId;
+    expect(
+      cast.state.phase.dungeon.encounters.find(
+        ({ roomId }) => roomId === encounterRoomId,
+      ),
+    ).toMatchObject({ currentHp: 2, status: 'active' });
   });
 
   it('retreats to the prior room and preserves the wounded active threat', () => {

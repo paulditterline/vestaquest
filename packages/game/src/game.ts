@@ -3,12 +3,15 @@ import {
   ENEMIES,
   HERO_STARTING_STATS,
   advanceHeroForRooms,
+  type SpellAffinity,
 } from './balance.js';
 import {
   rollAttack,
   rollInitiative,
+  rollLightning,
   rollRun,
   rollSmash,
+  rollStun,
   type OpposedRoll,
 } from './combat.js';
 import { placeCoreEncounters } from './encounters.js';
@@ -44,11 +47,18 @@ import {
   type MapViewGrid,
   type RunPhase,
   type RunState,
+  SCROLL_IDS,
+  type ScrollId,
   type TitlePresentation,
 } from './types.js';
 
 const NO_CHOICES = Object.freeze([]) as readonly GameChoice[];
 const NO_PRESENTATIONS = Object.freeze([]) as readonly GamePresentation[];
+const STARTING_SCROLL_POUCH = Object.freeze([
+  'fireball',
+  'lightning',
+  'stun',
+] as const);
 
 type TransitionResult = Pick<RunState, 'phase' | 'rng'> &
   Readonly<{ presentations?: readonly GamePresentation[] }>;
@@ -122,6 +132,41 @@ export function deriveView(state: RunState): GameView {
     case 'combat': {
       const encounter = activeEncounter(state.phase);
       const enemy = ENEMIES[encounter.enemyId];
+      if (state.phase.menu === 'spells') {
+        const counts = scrollCounts(state.phase.scrollPouch);
+        const spellChoices = SCROLL_IDS.flatMap((scroll) =>
+          counts[scroll] > 0
+            ? [
+                {
+                  id: choiceForScroll(scroll),
+                  number: 0,
+                  label: scroll.toUpperCase(),
+                },
+              ]
+            : [],
+        );
+        spellChoices.push({
+          id: CHOICE_IDS.cancelSpell,
+          number: 0,
+          label: 'CANCEL',
+        });
+        return Object.freeze({
+          ...base,
+          kind: 'spell-select',
+          enemyName: enemy.name,
+          scrolls: Object.freeze({
+            FIREBALL: counts.fireball,
+            LIGHTNING: counts.lightning,
+            STUN: counts.stun,
+          }),
+          choices: freezeChoices(
+            spellChoices.map((choice, index) => ({
+              ...choice,
+              number: index + 1,
+            })),
+          ),
+        });
+      }
       const choices: GameChoice[] = [
         { id: CHOICE_IDS.attack, number: 1, label: 'ATTACK' },
       ];
@@ -130,6 +175,16 @@ export function deriveView(state: RunState): GameView {
           id: CHOICE_IDS.smash,
           number: choices.length + 1,
           label: 'SMASH',
+        });
+      }
+      if (
+        state.phase.heroClass === 'wizard' &&
+        state.phase.scrollPouch.length > 0
+      ) {
+        choices.push({
+          id: CHOICE_IDS.spell,
+          number: choices.length + 1,
+          label: 'SPELL',
         });
       }
       if (
@@ -161,6 +216,7 @@ export function deriveView(state: RunState): GameView {
         smashAvailable:
           state.phase.heroClass === 'warrior' && !state.phase.smashUsed,
         heldItem: state.phase.consumable === null ? null : 'HEAL',
+        scrollsRemaining: state.phase.scrollPouch.length,
         choices: freezeChoices(choices),
       });
     }
@@ -328,6 +384,8 @@ function transitionFromChoice(
           heroClass,
           stats: HERO_STARTING_STATS[heroClass],
           consumable: 'healing-draught',
+          scrollPouch:
+            heroClass === 'wizard' ? STARTING_SCROLL_POUCH : Object.freeze([]),
           enemiesSlain: 0,
           dungeon,
         }),
@@ -454,6 +512,7 @@ function enterCombat(
     heroClass: phase.heroClass,
     stats: phase.stats,
     consumable: phase.consumable,
+    scrollPouch: phase.scrollPouch,
     enemiesSlain: phase.enemiesSlain,
     dungeon: phase.dungeon,
     encounterRoomId,
@@ -462,6 +521,7 @@ function enterCombat(
     initiativeWinner: initiative.winner,
     enemyHasActed: initiative.winner === 'enemy',
     smashUsed: false,
+    menu: 'actions',
   });
   const initiativePresentation = makeRollPresentation({
     purpose: 'initiative',
@@ -499,6 +559,16 @@ function transitionCombat(
   choiceId: ChoiceId,
   rng: RunState['rng'],
 ): TransitionResult {
+  if (phase.menu === 'spells') {
+    if (choiceId === CHOICE_IDS.cancelSpell) {
+      return {
+        phase: Object.freeze({ ...phase, menu: 'actions' }),
+        rng,
+      };
+    }
+    return resolveWizardScroll(phase, scrollForChoice(choiceId), rng);
+  }
+
   switch (choiceId) {
     case CHOICE_IDS.attack:
       return resolveHeroAttack(phase, rng, false);
@@ -507,6 +577,14 @@ function transitionCombat(
         throw new Error('Smash is not available.');
       }
       return resolveHeroAttack(phase, rng, true);
+    case CHOICE_IDS.spell:
+      if (phase.heroClass !== 'wizard' || phase.scrollPouch.length === 0) {
+        throw new Error('Spell casting is not available.');
+      }
+      return {
+        phase: Object.freeze({ ...phase, menu: 'spells' }),
+        rng,
+      };
     case CHOICE_IDS.item: {
       if (
         phase.consumable !== 'healing-draught' ||
@@ -569,6 +647,7 @@ function transitionCombat(
           heroClass: phase.heroClass,
           stats: phase.stats,
           consumable: phase.consumable,
+          scrollPouch: phase.scrollPouch,
           enemiesSlain: phase.enemiesSlain,
           dungeon: Object.freeze({
             ...phase.dungeon,
@@ -582,6 +661,199 @@ function transitionCombat(
     default:
       throw new Error(`Choice ${choiceId} is not a combat action.`);
   }
+}
+
+function resolveWizardScroll(
+  phase: CombatPhase,
+  scroll: ScrollId,
+  rng: RunState['rng'],
+): TransitionResult {
+  if (phase.heroClass !== 'wizard') {
+    throw new Error('Only the wizard can cast scrolls.');
+  }
+  if (!phase.scrollPouch.includes(scroll)) {
+    throw new Error(`The ${scroll} scroll is not available.`);
+  }
+
+  const encounter = activeEncounter(phase);
+  const enemy = ENEMIES[encounter.enemyId];
+  const affinity = enemy.spellAffinities[scroll];
+  const castingPhase = Object.freeze({
+    ...phase,
+    scrollPouch: removeScroll(phase.scrollPouch, scroll),
+    menu: 'actions' as const,
+  });
+
+  if (scroll === 'stun') {
+    const result = rollStun(rng, phase.stats.power, enemy.skill);
+    const presentation = makeRollPresentation({
+      purpose: 'spell',
+      prompt: 'WIZARD CASTS STUN',
+      leftName: 'WIZARD',
+      leftStat: 'P',
+      leftDiceLabel: 'D6',
+      leftDice: [result.roll.leftDie],
+      rightName: enemy.name,
+      rightStat: 'S',
+      rightDiceLabel: 'D6',
+      rightDice: [result.roll.rightDie],
+      roll: result.roll,
+      verdict: result.stunned
+        ? `${rollDisplayName(enemy.name)} STUNNED`
+        : 'STUN FAILED',
+    });
+    if (result.stunned) {
+      return {
+        phase: castingPhase,
+        rng: result.rng,
+        presentations: Object.freeze([presentation]),
+      };
+    }
+    const counter = resolveEnemyTurn(castingPhase, result.rng);
+    return {
+      ...counter,
+      presentations: Object.freeze([
+        presentation,
+        ...(counter.presentations ?? NO_PRESENTATIONS),
+      ]),
+    };
+  }
+
+  if (scroll === 'lightning') {
+    const result = rollLightning(rng, phase.stats.power, enemy.defense);
+    return resolveDamageSpell(
+      castingPhase,
+      result.rng,
+      affinity,
+      lightningDamage(result.damage, affinity),
+      makeRollPresentation({
+        purpose: 'spell',
+        prompt: 'WIZARD CASTS LIGHTNING',
+        leftName: 'WIZARD',
+        leftStat: 'P',
+        leftDiceLabel: '2D6',
+        leftDice: [result.keptDie, result.discardedDie],
+        rightName: enemy.name,
+        rightStat: 'D',
+        rightDiceLabel: 'D6',
+        rightDice: [result.roll.rightDie],
+        roll: result.roll,
+        verdict: spellDamageVerdict(
+          enemy.name,
+          lightningDamage(result.damage, affinity),
+          affinity,
+        ),
+      }),
+    );
+  }
+
+  const result = rollAttack(rng, phase.stats.power, enemy.defense);
+  const damage = fireballDamage(result.damage, affinity);
+  return resolveDamageSpell(
+    castingPhase,
+    result.rng,
+    affinity,
+    damage,
+    makeRollPresentation({
+      purpose: 'spell',
+      prompt: 'WIZARD CASTS FIREBALL',
+      leftName: 'WIZARD',
+      leftStat: 'P',
+      leftDiceLabel: 'D6',
+      leftDice: [result.roll.leftDie],
+      rightName: enemy.name,
+      rightStat: 'D',
+      rightDiceLabel: 'D6',
+      rightDice: [result.roll.rightDie],
+      roll: result.roll,
+      verdict: spellDamageVerdict(enemy.name, damage, affinity),
+    }),
+  );
+}
+
+function resolveDamageSpell(
+  phase: CombatPhase,
+  rng: RunState['rng'],
+  affinity: SpellAffinity,
+  damage: number,
+  presentation: GamePresentation,
+): TransitionResult {
+  const encounter = activeEncounter(phase);
+  const enemy = ENEMIES[encounter.enemyId];
+  const currentHp = Math.max(0, encounter.currentHp - damage);
+  const dungeon = updateEncounter(phase.dungeon, encounter.roomId, {
+    currentHp,
+    status: currentHp === 0 ? 'resolved' : 'active',
+  });
+  const finalPresentation =
+    currentHp === 0
+      ? Object.freeze({
+          ...presentation,
+          verdict: `${affinity === 'weak' ? 'WEAK! ' : ''}${rollDisplayName(enemy.name)} SLAIN`,
+        })
+      : presentation;
+  if (currentHp === 0) {
+    return {
+      phase: Object.freeze({
+        kind: 'exploration',
+        heroClass: phase.heroClass,
+        stats: phase.stats,
+        consumable: phase.consumable,
+        scrollPouch: phase.scrollPouch,
+        enemiesSlain: phase.enemiesSlain + 1,
+        dungeon,
+      }),
+      rng,
+      presentations: Object.freeze([finalPresentation]),
+    };
+  }
+  const counter = resolveEnemyTurn(
+    Object.freeze({ ...phase, dungeon, menu: 'actions' }),
+    rng,
+  );
+  return {
+    ...counter,
+    presentations: Object.freeze([
+      finalPresentation,
+      ...(counter.presentations ?? NO_PRESENTATIONS),
+    ]),
+  };
+}
+
+function fireballDamage(
+  rolledDamage: 0 | 1 | 2,
+  affinity: SpellAffinity,
+): number {
+  if (rolledDamage === 0 || affinity === 'immune') return 0;
+  if (affinity === 'healed') return 0;
+  if (affinity === 'weak') return 3;
+  if (affinity === 'resistant') return 1;
+  return 2;
+}
+
+function lightningDamage(
+  rolledDamage: 0 | 1 | 2,
+  affinity: SpellAffinity,
+): number {
+  if (rolledDamage === 0 || affinity === 'immune' || affinity === 'healed') {
+    return 0;
+  }
+  if (affinity === 'weak') return 2;
+  if (affinity === 'resistant') return Math.max(0, rolledDamage - 1);
+  return rolledDamage;
+}
+
+function spellDamageVerdict(
+  enemyName: CombatantName,
+  damage: number,
+  affinity: SpellAffinity,
+): string {
+  if (affinity === 'immune') return 'SPELL IMMUNE';
+  if (affinity === 'healed') return 'SPELL ABSORBED';
+  if (damage === 0) return `${rollDisplayName(enemyName)} BLOCKS`;
+  if (affinity === 'weak') return `WEAK! HIT: ${damage}`;
+  if (affinity === 'resistant') return `RESISTS! HIT: ${damage}`;
+  return `HIT: ${damage}`;
 }
 
 function resolveHeroAttack(
@@ -629,6 +901,7 @@ function resolveHeroAttack(
         heroClass: phase.heroClass,
         stats: phase.stats,
         consumable: phase.consumable,
+        scrollPouch: phase.scrollPouch,
         enemiesSlain: phase.enemiesSlain + 1,
         dungeon,
       }),
@@ -701,6 +974,7 @@ function resolveEnemyTurn(
       dungeon,
       stats: Object.freeze({ ...phase.stats, hp: heroHp }),
       enemyHasActed: true,
+      menu: 'actions',
     }),
     rng: result.rng,
     presentations: Object.freeze([presentation]),
@@ -876,6 +1150,51 @@ function classForChoice(choiceId: ChoiceId): HeroClass {
   }
 }
 
+function choiceForScroll(scroll: ScrollId): ChoiceId {
+  switch (scroll) {
+    case 'fireball':
+      return CHOICE_IDS.fireball;
+    case 'lightning':
+      return CHOICE_IDS.lightning;
+    case 'stun':
+      return CHOICE_IDS.stun;
+  }
+}
+
+function scrollForChoice(choiceId: ChoiceId): ScrollId {
+  switch (choiceId) {
+    case CHOICE_IDS.fireball:
+      return 'fireball';
+    case CHOICE_IDS.lightning:
+      return 'lightning';
+    case CHOICE_IDS.stun:
+      return 'stun';
+    default:
+      throw new Error(`Choice ${choiceId} is not a scroll.`);
+  }
+}
+
+function scrollCounts(
+  pouch: readonly ScrollId[],
+): Readonly<Record<ScrollId, number>> {
+  const counts: Record<ScrollId, number> = {
+    fireball: 0,
+    lightning: 0,
+    stun: 0,
+  };
+  for (const scroll of pouch) counts[scroll] += 1;
+  return Object.freeze(counts);
+}
+
+function removeScroll(
+  pouch: readonly ScrollId[],
+  scroll: ScrollId,
+): readonly ScrollId[] {
+  const index = pouch.indexOf(scroll);
+  if (index === -1) throw new Error(`The ${scroll} scroll is not available.`);
+  return Object.freeze([...pouch.slice(0, index), ...pouch.slice(index + 1)]);
+}
+
 function heroName(heroClass: HeroClass): 'WARRIOR' | 'ROGUE' | 'WIZARD' {
   return heroClass.toUpperCase() as 'WARRIOR' | 'ROGUE' | 'WIZARD';
 }
@@ -886,7 +1205,7 @@ function rollDisplayName(name: CombatantName): string {
 
 function makeRollPresentation(
   input: Readonly<{
-    purpose: 'initiative' | 'attack' | 'run';
+    purpose: 'initiative' | 'attack' | 'run' | 'spell';
     prompt: string;
     leftName: 'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT';
     leftStat: 'P' | 'D' | 'S';

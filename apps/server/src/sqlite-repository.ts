@@ -539,6 +539,7 @@ function parseGamePresentation(value: unknown): GamePresentation {
       'initiative',
       'attack',
       'run',
+      'spell',
     ] as const),
     prompt,
     left: parseRollSide(presentation.left),
@@ -628,6 +629,7 @@ function parseGameView(value: unknown): GameView {
     'class-select',
     'exploration',
     'combat',
+    'spell-select',
     'victory',
     'death',
   ] as const);
@@ -736,6 +738,7 @@ function parseGameView(value: unknown): GameView {
         'enemyMaximumHp',
         'smashAvailable',
         'heldItem',
+        'scrollsRemaining',
       ]);
       const enemyId = requireEnum(view.enemyId, [
         'ghoul',
@@ -776,6 +779,59 @@ function parseGameView(value: unknown): GameView {
           view.heldItem === null
             ? null
             : requireEnum(view.heldItem, ['HEAL'] as const),
+        scrollsRemaining: requireNonnegativeInteger(
+          view.scrollsRemaining,
+          'scrolls remaining',
+        ),
+      });
+    }
+    case 'spell-select': {
+      requireKeys(view, [
+        'id',
+        'revision',
+        'choices',
+        'kind',
+        'enemyName',
+        'scrolls',
+      ]);
+      const enemyName = requireEnum(view.enemyName, [
+        'GHOUL',
+        'SKELETON KNIGHT',
+      ] as const);
+      const scrolls = requireExactObject(view.scrolls, [
+        'FIREBALL',
+        'LIGHTNING',
+        'STUN',
+      ]);
+      const parsedScrolls = Object.freeze({
+        FIREBALL: requireNonnegativeInteger(scrolls.FIREBALL, 'fireball count'),
+        LIGHTNING: requireNonnegativeInteger(
+          scrolls.LIGHTNING,
+          'lightning count',
+        ),
+        STUN: requireNonnegativeInteger(scrolls.STUN, 'stun count'),
+      });
+      const expectedLabels = [
+        ...(parsedScrolls.FIREBALL > 0 ? ['FIREBALL'] : []),
+        ...(parsedScrolls.LIGHTNING > 0 ? ['LIGHTNING'] : []),
+        ...(parsedScrolls.STUN > 0 ? ['STUN'] : []),
+        'CANCEL',
+      ];
+      if (
+        choices.length !== expectedLabels.length ||
+        choices.some(
+          (choice, index) =>
+            choice.number !== index + 1 ||
+            choice.label !== expectedLabels[index],
+        )
+      ) {
+        throw new PersistenceCorruptionError('spell choices');
+      }
+      return Object.freeze({
+        ...base,
+        kind,
+        enemyName,
+        scrolls: parsedScrolls,
       });
     }
     case 'victory':
@@ -859,7 +915,12 @@ function parseChoices(value: unknown) {
           'action.item',
           'combat.attack',
           'combat.smash',
+          'combat.spell',
           'combat.run',
+          'spell.fireball',
+          'spell.lightning',
+          'spell.stun',
+          'spell.cancel',
         ] as const),
         number: requirePositiveInteger(record.number, 'choice number'),
         label: requireString(record.label),

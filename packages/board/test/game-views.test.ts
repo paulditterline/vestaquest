@@ -65,6 +65,19 @@ describe('semantic game-view renderers', () => {
     }
   });
 
+  it('renders the Wizard scroll pouch with Cancel as navigation', () => {
+    let state = choose(createRun(10), CHOICE_IDS.wizard, 'select-wizard');
+    state = choose(state, CHOICE_IDS.north, 'north');
+    state = choose(state, CHOICE_IDS.north, 'north-again');
+    state = choose(state, CHOICE_IDS.east, 'enter-fight');
+    state = choose(state, CHOICE_IDS.spell, 'open-spells');
+    const view = deriveView(state);
+    expect(view.kind).toBe('spell-select');
+    const layout = renderGameView(view, 'black');
+    expect(isFlagshipLayout(layout)).toBe(true);
+    expect(snapshotLayout(layout)).toMatchSnapshot();
+  });
+
   it('renders the provisional exit outcome after the hidden room is found', () => {
     const view = escapeView();
     expect(view.kind).toBe('victory');
