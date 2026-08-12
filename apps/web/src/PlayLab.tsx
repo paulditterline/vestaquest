@@ -95,6 +95,7 @@ export function PlayLabView({
         </div>
         <aside className="play-lab__controller" aria-label="Game controller">
           <ControllerPanel
+            allowRestart
             onChoose={onChoose}
             onNewSession={onNewSession}
             onReconnect={onReconnect}

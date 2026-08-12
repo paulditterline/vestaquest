@@ -14,6 +14,7 @@ import {
   renderGameView,
   renderOpposedRollResult,
   renderOpposedRollScaffold,
+  renderCombatNotice,
   renderTitlePresentation,
   snapshotLayout,
 } from '../src/index.js';
@@ -76,6 +77,7 @@ describe('semantic game-view renderers', () => {
     const presentation: GamePresentation = {
       kind: 'opposed-roll',
       purpose: 'initiative',
+      prompt: 'ROLL FOR INITIATIVE',
       left: {
         name: 'WIZARD',
         diceLabel: 'D6',
@@ -100,6 +102,21 @@ describe('semantic game-view renderers', () => {
     for (const shell of ['black', 'white'] as const) {
       expect(
         snapshotLayout(renderOpposedRollResult(presentation, shell)),
+      ).toMatchSnapshot();
+    }
+  });
+
+  it('renders a healing result before the enemy response', () => {
+    const presentation = {
+      kind: 'combat-notice',
+      heading: 'HEALED 2 HP',
+      heroClass: 'wizard',
+      hp: 3,
+      maximumHp: 4,
+    } as const;
+    for (const shell of ['black', 'white'] as const) {
+      expect(
+        snapshotLayout(renderCombatNotice(presentation, shell)),
       ).toMatchSnapshot();
     }
   });

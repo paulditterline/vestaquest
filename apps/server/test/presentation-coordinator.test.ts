@@ -146,7 +146,7 @@ describe('PresentationCoordinator', () => {
     });
   });
 
-  it('delivers opposed rolls in order with Wave/Fast only on result frames', async () => {
+  it('delivers opposed rolls in order without changing board transitions', async () => {
     const { coordinator, repository, service, transport } = createHarness(
       undefined,
       10,
@@ -175,9 +175,9 @@ describe('PresentationCoordinator', () => {
       transport.attempts.slice(-5).map(({ transition }) => transition),
     ).toEqual([
       { transition: 'classic', transitionSpeed: 'gentle' },
-      { transition: 'wave', transitionSpeed: 'fast' },
       { transition: 'classic', transitionSpeed: 'gentle' },
-      { transition: 'wave', transitionSpeed: 'fast' },
+      { transition: 'classic', transitionSpeed: 'gentle' },
+      { transition: 'classic', transitionSpeed: 'gentle' },
       { transition: 'classic', transitionSpeed: 'gentle' },
     ]);
     await expect(transport.getTransition()).resolves.toEqual({

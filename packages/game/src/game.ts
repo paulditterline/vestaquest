@@ -31,6 +31,7 @@ import {
   type AcceptedCommandEntry,
   type ApplyCommandResult,
   type ChoiceId,
+  type CombatantName,
   type CombatPhase,
   type DungeonRunState,
   type ExplorationPhase,
@@ -100,7 +101,7 @@ export function deriveView(state: RunState): GameView {
       const numberedChoices = canUseItem
         ? freezeChoices([
             ...choices,
-            { id: CHOICE_IDS.item, number: choices.length + 1, label: 'ITEM' },
+            { id: CHOICE_IDS.item, number: choices.length + 1, label: 'HEAL' },
           ])
         : choices;
       return Object.freeze({
@@ -138,7 +139,7 @@ export function deriveView(state: RunState): GameView {
         choices.push({
           id: CHOICE_IDS.item,
           number: choices.length + 1,
-          label: 'ITEM',
+          label: 'HEAL',
         });
       }
       choices.push({
@@ -168,7 +169,7 @@ export function deriveView(state: RunState): GameView {
         ...base,
         kind: 'victory',
         heroClass: state.phase.heroClass,
-        heading: 'YOU ESCAPED',
+        heading: 'YOU ESCAPED!',
         roomsFound: state.phase.roomsFound,
         enemiesSlain: state.phase.enemiesSlain,
         choices: NO_CHOICES,
@@ -464,6 +465,7 @@ function enterCombat(
   });
   const initiativePresentation = makeRollPresentation({
     purpose: 'initiative',
+    prompt: 'ROLL FOR INITIATIVE',
     leftName: heroName(phase.heroClass),
     leftStat: 'S',
     leftDiceLabel: 'D6',
@@ -512,23 +514,34 @@ function transitionCombat(
       ) {
         throw new Error('No combat item is usable.');
       }
-      return resolveEnemyTurn(
-        Object.freeze({
-          ...phase,
-          consumable: null,
-          stats: Object.freeze({
-            ...phase.stats,
-            hp: Math.min(phase.stats.maximumHp, phase.stats.hp + 2),
+      const healedHp = Math.min(phase.stats.maximumHp, phase.stats.hp + 2);
+      const healedPhase = Object.freeze({
+        ...phase,
+        consumable: null,
+        stats: Object.freeze({ ...phase.stats, hp: healedHp }),
+      });
+      const counter = resolveEnemyTurn(healedPhase, rng);
+      return {
+        ...counter,
+        presentations: Object.freeze([
+          Object.freeze({
+            kind: 'combat-notice' as const,
+            heading: `HEALED ${healedHp - phase.stats.hp} HP` as
+              'HEALED 1 HP' | 'HEALED 2 HP',
+            heroClass: phase.heroClass,
+            hp: healedHp,
+            maximumHp: phase.stats.maximumHp,
           }),
-        }),
-        rng,
-      );
+          ...(counter.presentations ?? NO_PRESENTATIONS),
+        ]),
+      };
     }
     case CHOICE_IDS.run: {
       const enemy = ENEMIES[activeEncounter(phase).enemyId];
       const result = rollRun(rng, phase.stats.skill, enemy.skill);
       const runPresentation = makeRollPresentation({
         purpose: 'run',
+        prompt: 'ATTEMPT TO RUN',
         leftName: heroName(phase.heroClass),
         leftStat: 'S',
         leftDiceLabel: 'D6',
@@ -586,6 +599,7 @@ function resolveHeroAttack(
   const currentHp = Math.max(0, encounter.currentHp - result.damage);
   const attackPresentation = makeRollPresentation({
     purpose: 'attack',
+    prompt: `${heroName(phase.heroClass)} ATTACKS`,
     leftName: heroName(phase.heroClass),
     leftStat: 'P',
     leftDiceLabel: smash ? '2D6' : 'D6',
@@ -662,15 +676,16 @@ function resolveEnemyTurn(
         : `HIT: ${result.damage}`;
   const presentation = makeRollPresentation({
     purpose: 'attack',
-    leftName: enemy.name,
-    leftStat: 'P',
+    prompt: `${rollDisplayName(enemy.name)} ATTACKS`,
+    leftName: heroName(phase.heroClass),
+    leftStat: 'D',
     leftDiceLabel: 'D6',
-    leftDice: [result.roll.leftDie],
-    rightName: heroName(phase.heroClass),
-    rightStat: 'D',
+    leftDice: [result.roll.rightDie],
+    rightName: enemy.name,
+    rightStat: 'P',
     rightDiceLabel: 'D6',
-    rightDice: [result.roll.rightDie],
-    roll: result.roll,
+    rightDice: [result.roll.leftDie],
+    roll: swapRollSides(result.roll),
     verdict,
   });
   if (heroHp === 0) {
@@ -865,9 +880,14 @@ function heroName(heroClass: HeroClass): 'WARRIOR' | 'ROGUE' | 'WIZARD' {
   return heroClass.toUpperCase() as 'WARRIOR' | 'ROGUE' | 'WIZARD';
 }
 
+function rollDisplayName(name: CombatantName): string {
+  return name === 'SKELETON KNIGHT' ? 'SKEL KNIGHT' : name;
+}
+
 function makeRollPresentation(
   input: Readonly<{
     purpose: 'initiative' | 'attack' | 'run';
+    prompt: string;
     leftName: 'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT';
     leftStat: 'P' | 'D' | 'S';
     leftDiceLabel: 'D6' | '2D6';
@@ -883,6 +903,7 @@ function makeRollPresentation(
   return Object.freeze({
     kind: 'opposed-roll',
     purpose: input.purpose,
+    prompt: input.prompt,
     left: Object.freeze({
       name: input.leftName,
       diceLabel: input.leftDiceLabel,
@@ -900,6 +921,17 @@ function makeRollPresentation(
       total: input.roll.rightTotal,
     }),
     verdict: input.verdict,
+  });
+}
+
+function swapRollSides(roll: OpposedRoll): OpposedRoll {
+  return Object.freeze({
+    leftDie: roll.rightDie,
+    leftModifier: roll.rightModifier,
+    leftTotal: roll.rightTotal,
+    rightDie: roll.leftDie,
+    rightModifier: roll.leftModifier,
+    rightTotal: roll.leftTotal,
   });
 }
 

@@ -1,12 +1,14 @@
 import type {
   ClassSelectView,
+  CombatNoticePresentation,
   CombatView,
   DeathView,
   ExplorationView,
   GameChoice,
-  GamePresentation,
   GameView,
   HeroClass,
+  OpposedRollPresentation,
+  RollSidePresentation,
   TitlePresentation,
   VictoryView,
 } from '@vestaquest/game';
@@ -39,7 +41,7 @@ export function renderTitlePresentation(
 
 export function renderClassSelectView(view: ClassSelectView): FlagshipLayout {
   const choices = requireNumberedChoices(view.choices, 3);
-  let layout = writeText(createFlagshipLayout(), 'CHOOSE  HP P D S L', {
+  let layout = writeText(createFlagshipLayout(), 'CLASS      HP P D S L', {
     row: 0,
     column: 0,
   });
@@ -51,7 +53,12 @@ export function renderClassSelectView(view: ClassSelectView): FlagshipLayout {
     layout = writeText(layout, row, { row: index + 1, column: 0 });
   }
 
-  return writeText(layout, 'STARTING VALUES', { row: 5, column: 3 });
+  return writeText(layout, 'SELECT CHARACTER', {
+    row: 5,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
 }
 
 export function renderExplorationView(
@@ -114,8 +121,7 @@ export function renderVictoryView(view: VictoryView): FlagshipLayout {
     row: 3,
     column: 0,
   });
-  layout = writeText(layout, 'EXIT CHALLENGE', { row: 4, column: 0 });
-  return writeText(layout, 'ARRIVES IN SLICE 8', { row: 5, column: 0 });
+  return layout;
 }
 
 export function renderDeathView(view: DeathView): FlagshipLayout {
@@ -186,7 +192,7 @@ export function renderCombatView(
 }
 
 export function renderOpposedRollScaffold(
-  presentation: GamePresentation,
+  presentation: OpposedRollPresentation,
 ): FlagshipLayout {
   let layout = createFlagshipLayout();
   layout = writeRollName(layout, 0, presentation.left);
@@ -195,20 +201,57 @@ export function renderOpposedRollScaffold(
     column: 0,
   });
   layout = writeRollName(layout, 2, presentation.right);
-  return writeText(layout, presentation.right.diceLabel, {
+  layout = writeText(layout, presentation.right.diceLabel, {
     row: 3,
     column: 0,
+  });
+  return writeText(layout, presentation.prompt, {
+    row: 4,
+    column: 0,
+    width: 22,
+    align: 'center',
   });
 }
 
 export function renderOpposedRollResult(
-  presentation: GamePresentation,
+  presentation: OpposedRollPresentation,
   shell: BoardShell,
 ): FlagshipLayout {
   let layout = renderOpposedRollScaffold(presentation);
   layout = writeRollResult(layout, 1, presentation.left, shell);
   layout = writeRollResult(layout, 3, presentation.right, shell);
   return writeText(layout, presentation.verdict, {
+    row: 5,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
+}
+
+export function renderCombatNotice(
+  presentation: CombatNoticePresentation,
+  shell: BoardShell,
+): FlagshipLayout {
+  let layout = writeText(createFlagshipLayout(), presentation.heading, {
+    row: 0,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
+  layout = writeText(
+    layout,
+    `${classLabel(presentation.heroClass)} HP${presentation.hp}/${presentation.maximumHp}`,
+    { row: 2, column: 0, width: 22, align: 'center' },
+  );
+  layout = writeHpBar(
+    layout,
+    3,
+    Math.floor((22 - presentation.maximumHp) / 2),
+    presentation.hp,
+    presentation.maximumHp,
+    shell,
+  );
+  return writeText(layout, 'HEALING DRAUGHT USED', {
     row: 5,
     column: 0,
     width: 22,
@@ -260,22 +303,25 @@ function writeHpBar(
 function writeRollName(
   layout: FlagshipLayout,
   row: number,
-  side: GamePresentation['left'],
+  side: RollSidePresentation,
 ): FlagshipLayout {
-  return writeText(
-    layout,
-    `${side.name} ${side.modifierStat}${side.modifier}`,
-    {
-      row,
-      column: 0,
-    },
-  );
+  const name = side.name === 'SKELETON KNIGHT' ? 'SKEL KNIGHT' : side.name;
+  const stat =
+    side.modifierStat === 'P'
+      ? 'POWER'
+      : side.modifierStat === 'D'
+        ? 'DEFENSE'
+        : 'SKILL';
+  return writeText(layout, `${name} ${stat} ${side.modifier}`, {
+    row,
+    column: 0,
+  });
 }
 
 function writeRollResult(
   layout: FlagshipLayout,
   row: number,
-  side: GamePresentation['left'],
+  side: RollSidePresentation,
   shell: BoardShell,
 ): FlagshipLayout {
   const trackStart = side.diceLabel === '2D6' ? 4 : 3;

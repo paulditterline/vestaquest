@@ -26,7 +26,11 @@ export type PresentationPayload =
   | Readonly<{ kind: 'title'; presentation: TitlePresentation }>
   | Readonly<{
       kind: 'roll-scaffold' | 'roll-result';
-      presentation: GamePresentation;
+      presentation: Extract<GamePresentation, { kind: 'opposed-roll' }>;
+    }>
+  | Readonly<{
+      kind: 'combat-notice';
+      presentation: Extract<GamePresentation, { kind: 'combat-notice' }>;
     }>
   | Readonly<{ kind: 'game-view'; view: GameView }>;
 

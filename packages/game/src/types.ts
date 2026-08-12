@@ -197,7 +197,7 @@ export interface CombatView extends BaseGameView {
 export interface VictoryView extends BaseGameView {
   readonly kind: 'victory';
   readonly heroClass: HeroClass;
-  readonly heading: 'YOU ESCAPED';
+  readonly heading: 'YOU ESCAPED!';
   readonly roomsFound: number;
   readonly enemiesSlain: number;
 }
@@ -232,12 +232,22 @@ export interface RollSidePresentation {
 export interface OpposedRollPresentation {
   readonly kind: 'opposed-roll';
   readonly purpose: 'initiative' | 'attack' | 'run';
+  readonly prompt: string;
   readonly left: RollSidePresentation;
   readonly right: RollSidePresentation;
   readonly verdict: string;
 }
 
-export type GamePresentation = OpposedRollPresentation;
+export interface CombatNoticePresentation {
+  readonly kind: 'combat-notice';
+  readonly heading: 'HEALED 1 HP' | 'HEALED 2 HP';
+  readonly heroClass: HeroClass;
+  readonly hp: number;
+  readonly maximumHp: number;
+}
+
+export type GamePresentation =
+  OpposedRollPresentation | CombatNoticePresentation;
 
 export type CommandRejectionReason =
   | 'duplicate-command'

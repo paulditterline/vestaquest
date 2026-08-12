@@ -10,9 +10,11 @@ import {
   deriveTitlePresentation,
   replayRun,
   type AcceptedCommandEntry,
+  type CombatNoticePresentation,
   type GamePresentation,
   type GameView,
   type MapViewGrid,
+  type OpposedRollPresentation,
   type RunState,
 } from '@vestaquest/game';
 import { DuplicateSessionError, type SessionRepository } from './repository.js';
@@ -482,10 +484,22 @@ function parsePresentationPayload(json: string): PresentationPayload {
   }
   if (payload.kind === 'roll-scaffold' || payload.kind === 'roll-result') {
     requireKeys(payload, ['kind', 'presentation']);
+    const presentation = parseGamePresentation(payload.presentation);
+    if (presentation.kind !== 'opposed-roll') {
+      throw new PersistenceCorruptionError('roll presentation');
+    }
     return Object.freeze({
       kind: payload.kind,
-      presentation: parseGamePresentation(payload.presentation),
+      presentation,
     });
+  }
+  if (payload.kind === 'combat-notice') {
+    requireKeys(payload, ['kind', 'presentation']);
+    const presentation = parseGamePresentation(payload.presentation);
+    if (presentation.kind !== 'combat-notice') {
+      throw new PersistenceCorruptionError('combat notice presentation');
+    }
+    return Object.freeze({ kind: payload.kind, presentation });
   }
   if (payload.kind !== 'game-view') {
     throw new PersistenceCorruptionError('presentation payload');
@@ -498,9 +512,12 @@ function parsePresentationPayload(json: string): PresentationPayload {
 }
 
 function parseGamePresentation(value: unknown): GamePresentation {
+  const kind = requireRecord(value).kind;
+  if (kind === 'combat-notice') return parseCombatNotice(value);
   const presentation = requireExactObject(value, [
     'kind',
     'purpose',
+    'prompt',
     'left',
     'right',
     'verdict',
@@ -512,6 +529,10 @@ function parseGamePresentation(value: unknown): GamePresentation {
   if (verdict.length < 1 || verdict.length > 22) {
     throw new PersistenceCorruptionError('roll verdict');
   }
+  const prompt = requireString(presentation.prompt);
+  if (prompt.length < 1 || prompt.length > 22) {
+    throw new PersistenceCorruptionError('roll prompt');
+  }
   return Object.freeze({
     kind: 'opposed-roll',
     purpose: requireEnum(presentation.purpose, [
@@ -519,13 +540,45 @@ function parseGamePresentation(value: unknown): GamePresentation {
       'attack',
       'run',
     ] as const),
+    prompt,
     left: parseRollSide(presentation.left),
     right: parseRollSide(presentation.right),
     verdict,
   });
 }
 
-function parseRollSide(value: unknown): GamePresentation['left'] {
+function parseCombatNotice(value: unknown): CombatNoticePresentation {
+  const presentation = requireExactObject(value, [
+    'kind',
+    'heading',
+    'heroClass',
+    'hp',
+    'maximumHp',
+  ]);
+  if (presentation.kind !== 'combat-notice') {
+    throw new PersistenceCorruptionError('combat notice');
+  }
+  const hp = requireNonnegativeInteger(presentation.hp, 'hero HP');
+  const maximumHp = requirePositiveInteger(
+    presentation.maximumHp,
+    'hero maximum HP',
+  );
+  if (maximumHp > 5 || hp > maximumHp) {
+    throw new PersistenceCorruptionError('combat notice HP');
+  }
+  return Object.freeze({
+    kind: 'combat-notice',
+    heading: requireEnum(presentation.heading, [
+      'HEALED 1 HP',
+      'HEALED 2 HP',
+    ] as const),
+    heroClass: parseHeroClass(presentation.heroClass),
+    hp,
+    maximumHp,
+  });
+}
+
+function parseRollSide(value: unknown): OpposedRollPresentation['left'] {
   const side = requireExactObject(value, [
     'name',
     'diceLabel',
@@ -644,7 +697,7 @@ function parseGameView(value: unknown): GameView {
         ) ||
         choices.length !== directions.length + (canUseItem ? 1 : 0) ||
         canUseItem !==
-          (itemChoice?.id === 'action.item' && itemChoice.label === 'ITEM') ||
+          (itemChoice?.id === 'action.item' && itemChoice.label === 'HEAL') ||
         (canUseItem && heldItem === null)
       ) {
         throw new PersistenceCorruptionError('exploration choices');
@@ -736,7 +789,7 @@ function parseGameView(value: unknown): GameView {
         'roomsFound',
         'enemiesSlain',
       ]);
-      if (view.heading !== 'YOU ESCAPED')
+      if (view.heading !== 'YOU ESCAPED!')
         throw new PersistenceCorruptionError('game view');
       if (choices.length !== 0)
         throw new PersistenceCorruptionError('terminal choices');
@@ -744,7 +797,7 @@ function parseGameView(value: unknown): GameView {
         ...base,
         kind,
         heroClass: parseHeroClass(view.heroClass),
-        heading: 'YOU ESCAPED',
+        heading: 'YOU ESCAPED!',
         roomsFound: requirePositiveInteger(view.roomsFound, 'rooms found'),
         enemiesSlain: requireNonnegativeInteger(
           view.enemiesSlain,

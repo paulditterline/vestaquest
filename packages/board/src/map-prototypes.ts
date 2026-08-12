@@ -77,19 +77,19 @@ export function renderMapPrototype(
       code: index < view.hp ? healthy : CHARACTER_CODE.RED,
     })),
   );
-  layout = writeText(layout, `P${view.power} D${view.defense} S${view.skill}`, {
+  layout = writeText(layout, `POW${view.power} DEF${view.defense}`, {
     row: 2,
     column: 0,
     width: 11,
   });
-  layout = writeText(layout, `LUCK ${view.luck}`, {
+  layout = writeText(layout, `SKILL${view.skill} LK${view.luck}`, {
     row: 3,
     column: 0,
     width: 11,
   });
   layout = writeText(
     layout,
-    `RM${view.roomsFound} ITEM:${view.heldItem === null ? '-' : (view.heldItem?.slice(0, 1) ?? '-')}`,
+    `RM${view.roomsFound} HEAL:${view.heldItem === null ? '-' : '1'}`,
     {
       row: 4,
       column: 0,
@@ -121,7 +121,7 @@ export function renderMapPrototype(
     (direction, index) => `${index + 1}${direction}`,
   );
   const choiceText = view.canUseItem
-    ? `${directionChoices.join('')}${directionChoices.length + 1}I`
+    ? `${directionChoices.join('')}${directionChoices.length + 1}H`
     : directionChoices.join(' ');
   return writeText(layout, choiceText, { row: 5, column: 0, width: 11 });
 }

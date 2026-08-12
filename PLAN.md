@@ -1,6 +1,6 @@
 # VestaQuest implementation plan
 
-Status: Slices 0–4 complete; Slice 5 core combat in progress
+Status: Slices 0–5 complete; approved Slice 5 branch awaiting merge
 
 Last updated: 2026-08-11
 
@@ -491,7 +491,7 @@ Acceptance:
 
 ### Slice 5 — core combat and death
 
-Status: **In progress**. Gate D is resolved; owner visual/physical review remains.
+Status: **Complete**. Gate D and final owner visual/physical review were approved on 2026-08-11; merge remains.
 
 Branch: `codex/core-combat`
 
@@ -505,6 +505,8 @@ Build:
 - Record the required full-board combat introduction art beat; finalize its
   visual design with the other pixel-art interstitials in Slice 8.
 - Opposed-roll scaffold/result sequencing using the transition decision from Gate B.
+- Preserve the owner's ordinary transition for every frame; do not change the board preference during rolls.
+- Show healing and updated HP before the automatic enemy response.
 - Six-row death epitaph and exact statistics.
 
 Acceptance:
@@ -646,10 +648,9 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Complete and physically review Slice 5 core combat, opposed-roll
-   presentation, and death on
-   `codex/core-combat`.
-2. Begin Slice 6 class actions, equipment, and progression after Slice 5 merges.
+1. Merge the approved Slice 5 core combat branch, `codex/core-combat`.
+2. Begin Slice 6 class actions, equipment, and progression with Wizard Fireball,
+   Lightning, and Stun scrolls as the first playable feature.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed

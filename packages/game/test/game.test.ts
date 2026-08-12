@@ -227,7 +227,7 @@ describe('map exploration game kernel', () => {
       choices: [
         { number: 1, label: 'N' },
         { number: 2, label: 'E' },
-        { id: CHOICE_IDS.item, number: 3, label: 'ITEM' },
+        { id: CHOICE_IDS.item, number: 3, label: 'HEAL' },
       ],
     });
 
@@ -297,6 +297,7 @@ describe('map exploration game kernel', () => {
       {
         kind: 'opposed-roll',
         purpose: 'initiative',
+        prompt: 'ROLL FOR INITIATIVE',
         left: { name: 'WARRIOR', modifierStat: 'S', diceLabel: 'D6' },
         right: { name: 'GHOUL', modifierStat: 'S', diceLabel: 'D6' },
         verdict: 'FIRST: GHOUL',
@@ -304,8 +305,9 @@ describe('map exploration game kernel', () => {
       {
         kind: 'opposed-roll',
         purpose: 'attack',
-        left: { name: 'GHOUL', modifierStat: 'P', diceLabel: 'D6' },
-        right: { name: 'WARRIOR', modifierStat: 'D', diceLabel: 'D6' },
+        prompt: 'GHOUL ATTACKS',
+        left: { name: 'WARRIOR', modifierStat: 'D', diceLabel: 'D6' },
+        right: { name: 'GHOUL', modifierStat: 'P', diceLabel: 'D6' },
       },
     ]);
 
@@ -320,12 +322,44 @@ describe('map exploration game kernel', () => {
     expect(smashed.presentations).toMatchObject([
       {
         purpose: 'attack',
+        prompt: 'WARRIOR ATTACKS',
         left: { name: 'WARRIOR', modifierStat: 'P', diceLabel: '2D6' },
         right: { name: 'GHOUL', modifierStat: 'D', diceLabel: 'D6' },
         verdict: 'GHOUL SLAIN',
       },
     ]);
-    expect(smashed.presentations[0]?.left.dice).toHaveLength(2);
+    const smashPresentation = smashed.presentations[0];
+    if (smashPresentation?.kind !== 'opposed-roll') {
+      throw new Error('Expected opposed Smash roll.');
+    }
+    expect(smashPresentation.left.dice).toHaveLength(2);
+  });
+
+  it('shows healing before the automatic enemy response', () => {
+    let state = beginExploration(10, CHOICE_IDS.wizard);
+    state = accept(state, 'north', CHOICE_IDS.north);
+    state = accept(state, 'north-again', CHOICE_IDS.north);
+    state = accept(state, 'east', CHOICE_IDS.east);
+    if (state.phase.kind !== 'combat') throw new Error('Expected combat.');
+    const wounded: RunState = {
+      ...state,
+      phase: {
+        ...state.phase,
+        stats: { ...state.phase.stats, hp: 1 },
+      },
+    };
+    const healed = choose(wounded, 'heal', CHOICE_IDS.item);
+    if (healed.status !== 'accepted') throw new Error('Expected healing.');
+    expect(healed.presentations).toMatchObject([
+      {
+        kind: 'combat-notice',
+        heading: 'HEALED 2 HP',
+        heroClass: 'wizard',
+        hp: 3,
+        maximumHp: 4,
+      },
+      { kind: 'opposed-roll', prompt: 'GHOUL ATTACKS' },
+    ]);
   });
 
   it('retreats to the prior room and preserves the wounded active threat', () => {
@@ -382,7 +416,7 @@ describe('map exploration game kernel', () => {
     });
     expect(deriveView(terminal)).toMatchObject({
       kind: 'victory',
-      heading: 'YOU ESCAPED',
+      heading: 'YOU ESCAPED!',
       roomsFound: 8,
       enemiesSlain: 3,
       choices: [],
