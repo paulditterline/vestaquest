@@ -33,6 +33,7 @@ export function ControllerApp({
 
 export type ControllerPanelProps = Readonly<{
   snapshot: ControllerSnapshot;
+  allowRestart?: boolean;
   onChoose: (choice: ChoiceNumber) => void;
   onNewSession: () => void;
   onReconnect: () => void;
@@ -40,6 +41,7 @@ export type ControllerPanelProps = Readonly<{
 
 export function ControllerPanel({
   snapshot,
+  allowRestart = false,
   onChoose,
   onNewSession,
   onReconnect,
@@ -99,7 +101,8 @@ export function ControllerPanel({
             New Game
           </button>
         </div>
-      ) : displayStatus === 'complete' ? (
+      ) : displayStatus === 'complete' ||
+        (allowRestart && displayStatus === 'ready') ? (
         <button
           className="controller-new-game"
           onClick={onNewSession}

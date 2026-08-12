@@ -190,7 +190,7 @@ export function renderDeath(summary: DeathSummary): FlagshipLayout {
   });
 }
 
-const provisionalClasses: readonly ClassSummary[] = Object.freeze([
+const startingClasses: readonly ClassSummary[] = Object.freeze([
   { name: 'WARRIOR', hp: 5, power: 5, defense: 4, skill: 2, luck: 2 },
   { name: 'ROGUE', hp: 4, power: 3, defense: 3, skill: 5, luck: 5 },
   { name: 'WIZARD', hp: 3, power: 5, defense: 2, skill: 3, luck: 4 },
@@ -216,6 +216,8 @@ const mapPrototypeViews: readonly MapPrototypeView[] = Object.freeze([
     luck: 2,
     roomsFound: 2,
     directions: ['N', 'E', 'S'],
+    heldItem: 'HEAL',
+    canUseItem: false,
     grid: [
       [U, U, U, U, U],
       [U, U, F, U, U],
@@ -235,6 +237,8 @@ const mapPrototypeViews: readonly MapPrototypeView[] = Object.freeze([
     luck: 5,
     roomsFound: 7,
     directions: ['N', 'E', 'W'],
+    heldItem: 'HEAL',
+    canUseItem: true,
     grid: [
       [U, D, E, A, U],
       [U, E, V, E, U],
@@ -254,6 +258,8 @@ const mapPrototypeViews: readonly MapPrototypeView[] = Object.freeze([
     luck: 4,
     roomsFound: 12,
     directions: ['N', 'E', 'S', 'W'],
+    heldItem: null,
+    canUseItem: false,
     grid: [
       [D, E, V, E, F],
       [U, E, E, D, U],
@@ -286,16 +292,14 @@ export function createFixtureCatalog(
     {
       id: 'class-select',
       label: 'Class selection',
-      description:
-        'All three classes and five compact stats. Values are layout fixtures only.',
-      provisionalValues: true,
+      description: 'All three classes and the approved Gate D starting values.',
       frames: [
         {
           id: 'class-select',
           label: 'Choose a class',
           accessibleSummary:
             'Choose Warrior, Rogue, or Wizard. Provisional layout values shown.',
-          layout: renderClassSelect(provisionalClasses),
+          layout: renderClassSelect(startingClasses),
         },
       ],
     },

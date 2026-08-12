@@ -44,6 +44,8 @@ export type MapPrototypeView = Readonly<{
   luck: number;
   roomsFound: number;
   directions: readonly MapDirection[];
+  heldItem?: 'HEAL' | null;
+  canUseItem?: boolean;
   grid: MapPrototypeGrid;
 }>;
 
@@ -75,21 +77,25 @@ export function renderMapPrototype(
       code: index < view.hp ? healthy : CHARACTER_CODE.RED,
     })),
   );
-  layout = writeText(layout, `P${view.power} D${view.defense} S${view.skill}`, {
+  layout = writeText(layout, `POW${view.power} DEF${view.defense}`, {
     row: 2,
     column: 0,
     width: 11,
   });
-  layout = writeText(layout, `LUCK ${view.luck}`, {
+  layout = writeText(layout, `SKILL${view.skill} LK${view.luck}`, {
     row: 3,
     column: 0,
     width: 11,
   });
-  layout = writeText(layout, `ROOMS ${view.roomsFound}`, {
-    row: 4,
-    column: 0,
-    width: 11,
-  });
+  layout = writeText(
+    layout,
+    `RM${view.roomsFound} HEAL:${view.heldItem === null ? '-' : '1'}`,
+    {
+      row: 4,
+      column: 0,
+      width: 11,
+    },
+  );
   layout = writeText(layout, 'MAP', {
     row: 0,
     column: MAP_COLUMN,
@@ -111,13 +117,13 @@ export function renderMapPrototype(
     ),
   );
 
-  return writeText(
-    layout,
-    view.directions
-      .map((direction, index) => `${index + 1}${direction}`)
-      .join(' '),
-    { row: 5, column: 0, width: 11 },
+  const directionChoices = view.directions.map(
+    (direction, index) => `${index + 1}${direction}`,
   );
+  const choiceText = view.canUseItem
+    ? `${directionChoices.join('')}${directionChoices.length + 1}H`
+    : directionChoices.join(' ');
+  return writeText(layout, choiceText, { row: 5, column: 0, width: 11 });
 }
 
 function mapCellPair(
@@ -179,6 +185,9 @@ function validateView(view: MapPrototypeView): void {
     throw new RangeError(
       'Map prototype requires from one through four directions.',
     );
+  }
+  if (view.canUseItem && view.heldItem === null) {
+    throw new RangeError('A usable map item requires a held item.');
   }
   if (new Set(view.directions).size !== view.directions.length) {
     throw new RangeError('Map prototype directions must be unique.');

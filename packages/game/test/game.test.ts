@@ -8,6 +8,7 @@ import {
   createRun,
   deriveTitlePresentation,
   deriveView,
+  createRng,
   type GameCommand,
   type RunState,
 } from '../src/index.js';
@@ -56,6 +57,13 @@ function escapeCrookedHalls(seed = 10): RunState {
     CHOICE_IDS.east,
   ]) {
     state = accept(state, `move-${state.revision}`, choiceId);
+    while (state.phase.kind === 'combat') {
+      const view = deriveView(state);
+      const action =
+        view.choices.find((choice) => choice.id === CHOICE_IDS.smash)?.id ??
+        CHOICE_IDS.attack;
+      state = accept(state, `fight-${state.revision}`, action);
+    }
   }
   return state;
 }
@@ -108,7 +116,7 @@ describe('map exploration game kernel', () => {
         revealedDeadEndPositions: [],
       },
     });
-    expect(state.rng.draws).toBe(2);
+    expect(state.rng.draws).toBe(6);
   });
 
   it('shows only authoritative numbered directions and keeps the exit hidden', () => {
@@ -186,17 +194,231 @@ describe('map exploration game kernel', () => {
     expect(view.grid[3][0]).toBe('current');
   });
 
+  it('levels automatically at unique-room thresholds without counting backtracking', () => {
+    let state = beginExploration(10);
+    state = accept(state, 'north-1', CHOICE_IDS.north);
+    state = accept(state, 'south', CHOICE_IDS.south);
+    state = accept(state, 'north-2', CHOICE_IDS.north);
+    state = accept(state, 'north-3', CHOICE_IDS.north);
+    state = accept(state, 'east', CHOICE_IDS.east);
+    expect(state.phase).toMatchObject({
+      kind: 'combat',
+      stats: { level: 2, hp: 5, power: 6, defense: 4 },
+      dungeon: { visitedRoomIds: ['A', 'B', 'C', 'D'] },
+    });
+  });
+
+  it('offers and consumes the held healing item from an injured map state', () => {
+    const initial = beginExploration(10, CHOICE_IDS.wizard);
+    if (initial.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration.');
+    }
+    const injured: RunState = {
+      ...initial,
+      phase: {
+        ...initial.phase,
+        stats: { ...initial.phase.stats, hp: 1 },
+      },
+    };
+    expect(deriveView(injured)).toMatchObject({
+      kind: 'exploration',
+      heldItem: 'HEAL',
+      canUseItem: true,
+      choices: [
+        { number: 1, label: 'N' },
+        { number: 2, label: 'E' },
+        { id: CHOICE_IDS.item, number: 3, label: 'HEAL' },
+      ],
+    });
+
+    const healed = accept(injured, 'drink', CHOICE_IDS.item);
+    expect(healed.phase).toMatchObject({
+      kind: 'exploration',
+      stats: { hp: 3, maximumHp: 3 },
+      consumable: null,
+    });
+    expect(deriveView(healed)).toMatchObject({
+      kind: 'exploration',
+      heldItem: null,
+      canUseItem: false,
+    });
+  });
+
+  it('enters a seeded encounter, resolves Smash, and marks the fight complete', () => {
+    let state = beginExploration(10);
+    state = accept(state, 'north', CHOICE_IDS.north);
+    state = accept(state, 'north-again', CHOICE_IDS.north);
+    state = accept(state, 'east', CHOICE_IDS.east);
+    expect(state.phase).toMatchObject({
+      kind: 'combat',
+      encounterRoomId: 'D',
+      retreatRoomId: 'C',
+      initiativeWinner: 'enemy',
+      enemyHasActed: true,
+      stats: { level: 2, hp: 5 },
+    });
+    expect(deriveView(state)).toMatchObject({
+      kind: 'combat',
+      enemyId: 'ghoul',
+      enemyHp: 2,
+      smashAvailable: true,
+      choices: [
+        { id: CHOICE_IDS.attack, number: 1 },
+        { id: CHOICE_IDS.smash, number: 2 },
+        { id: CHOICE_IDS.run, number: 3 },
+      ],
+    });
+
+    state = accept(state, 'smash', CHOICE_IDS.smash);
+    expect(state.phase).toMatchObject({
+      kind: 'exploration',
+      enemiesSlain: 1,
+      dungeon: { currentRoomId: 'D' },
+    });
+    if (state.phase.kind !== 'exploration') throw new Error('Expected map.');
+    expect(
+      state.phase.dungeon.encounters.find(({ roomId }) => roomId === 'D'),
+    ).toMatchObject({ currentHp: 0, status: 'resolved' });
+  });
+
+  it('emits deterministic opposed-roll presentations for initiative and combat', () => {
+    let state = beginExploration(10);
+    state = accept(state, 'north', CHOICE_IDS.north);
+    state = accept(state, 'north-again', CHOICE_IDS.north);
+    const encounterView = deriveView(state);
+    const entered = applyCommand(state, {
+      type: 'choose',
+      commandId: 'enter-fight',
+      viewId: encounterView.id,
+      choiceId: CHOICE_IDS.east,
+    });
+    if (entered.status !== 'accepted') throw new Error('Expected encounter.');
+    expect(entered.presentations).toMatchObject([
+      {
+        kind: 'opposed-roll',
+        purpose: 'initiative',
+        prompt: 'ROLL FOR INITIATIVE',
+        left: { name: 'WARRIOR', modifierStat: 'S', diceLabel: 'D6' },
+        right: { name: 'GHOUL', modifierStat: 'S', diceLabel: 'D6' },
+        verdict: 'FIRST: GHOUL',
+      },
+      {
+        kind: 'opposed-roll',
+        purpose: 'attack',
+        prompt: 'GHOUL ATTACKS',
+        left: { name: 'WARRIOR', modifierStat: 'D', diceLabel: 'D6' },
+        right: { name: 'GHOUL', modifierStat: 'P', diceLabel: 'D6' },
+      },
+    ]);
+
+    const combatView = entered.view;
+    const smashed = applyCommand(entered.state, {
+      type: 'choose',
+      commandId: 'smash',
+      viewId: combatView.id,
+      choiceId: CHOICE_IDS.smash,
+    });
+    if (smashed.status !== 'accepted') throw new Error('Expected Smash.');
+    expect(smashed.presentations).toMatchObject([
+      {
+        purpose: 'attack',
+        prompt: 'WARRIOR ATTACKS',
+        left: { name: 'WARRIOR', modifierStat: 'P', diceLabel: '2D6' },
+        right: { name: 'GHOUL', modifierStat: 'D', diceLabel: 'D6' },
+        verdict: 'GHOUL SLAIN',
+      },
+    ]);
+    const smashPresentation = smashed.presentations[0];
+    if (smashPresentation?.kind !== 'opposed-roll') {
+      throw new Error('Expected opposed Smash roll.');
+    }
+    expect(smashPresentation.left.dice).toHaveLength(2);
+  });
+
+  it('shows healing before the automatic enemy response', () => {
+    let state = beginExploration(10, CHOICE_IDS.wizard);
+    state = accept(state, 'north', CHOICE_IDS.north);
+    state = accept(state, 'north-again', CHOICE_IDS.north);
+    state = accept(state, 'east', CHOICE_IDS.east);
+    if (state.phase.kind !== 'combat') throw new Error('Expected combat.');
+    const wounded: RunState = {
+      ...state,
+      phase: {
+        ...state.phase,
+        stats: { ...state.phase.stats, hp: 1 },
+      },
+    };
+    const healed = choose(wounded, 'heal', CHOICE_IDS.item);
+    if (healed.status !== 'accepted') throw new Error('Expected healing.');
+    expect(healed.presentations).toMatchObject([
+      {
+        kind: 'combat-notice',
+        heading: 'HEALED 2 HP',
+        heroClass: 'wizard',
+        hp: 3,
+        maximumHp: 4,
+      },
+      { kind: 'opposed-roll', prompt: 'GHOUL ATTACKS' },
+    ]);
+  });
+
+  it('retreats to the prior room and preserves the wounded active threat', () => {
+    let state = beginExploration(10);
+    state = accept(state, 'north', CHOICE_IDS.north);
+    state = accept(state, 'north-again', CHOICE_IDS.north);
+    state = accept(state, 'east', CHOICE_IDS.east);
+    state = accept(state, 'run', CHOICE_IDS.run);
+    expect(state.phase).toMatchObject({
+      kind: 'exploration',
+      dungeon: { currentRoomId: 'C' },
+    });
+    if (state.phase.kind !== 'exploration') throw new Error('Expected map.');
+    expect(
+      state.phase.dungeon.encounters.find(({ roomId }) => roomId === 'D'),
+    ).toMatchObject({ currentHp: 2, status: 'active' });
+    const view = deriveView(state);
+    if (view.kind !== 'exploration') throw new Error('Expected exploration.');
+    expect(view.grid[2][1]).toBe('active-encounter');
+  });
+
+  it('records exact death statistics after a failed escape', () => {
+    let state = beginExploration(10);
+    state = accept(state, 'north', CHOICE_IDS.north);
+    state = accept(state, 'north-again', CHOICE_IDS.north);
+    state = accept(state, 'east', CHOICE_IDS.east);
+    if (state.phase.kind !== 'combat') throw new Error('Expected combat.');
+    const doomed: RunState = {
+      ...state,
+      rng: createRng(4),
+      phase: {
+        ...state.phase,
+        stats: { ...state.phase.stats, hp: 1 },
+      },
+    };
+    const dead = accept(doomed, 'failed-run', CHOICE_IDS.run);
+    expect(dead.phase).toEqual({
+      kind: 'death',
+      heroClass: 'warrior',
+      cause: 'GHOUL',
+      roomsFound: 4,
+      enemiesSlain: 0,
+      roomsUntilExit: 4,
+    });
+  });
+
   it('ends the slice only when the secretly selected exit room is entered', () => {
     const terminal = escapeCrookedHalls(10);
     expect(terminal.phase).toEqual({
       kind: 'victory',
       heroClass: 'warrior',
       roomsFound: 8,
+      enemiesSlain: 3,
     });
     expect(deriveView(terminal)).toMatchObject({
       kind: 'victory',
-      heading: 'YOU ESCAPED',
+      heading: 'YOU ESCAPED!',
       roomsFound: 8,
+      enemiesSlain: 3,
       choices: [],
     });
   });
@@ -212,9 +434,9 @@ describe('map exploration game kernel', () => {
         rngDraws,
       })),
     ).toEqual([
-      { sequence: 1, resultingPhase: 'exploration', rngDraws: 2 },
-      { sequence: 2, resultingPhase: 'exploration', rngDraws: 2 },
-      { sequence: 3, resultingPhase: 'exploration', rngDraws: 2 },
+      { sequence: 1, resultingPhase: 'exploration', rngDraws: 6 },
+      { sequence: 2, resultingPhase: 'exploration', rngDraws: 6 },
+      { sequence: 3, resultingPhase: 'exploration', rngDraws: 6 },
     ]);
   });
 });

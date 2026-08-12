@@ -3,6 +3,7 @@ import {
   type CommandSessionRequest,
   type SessionId,
 } from '@vestaquest/contracts';
+import { CHOICE_IDS, deriveView } from '@vestaquest/game';
 import { describe, expect, it } from 'vitest';
 import {
   InMemorySessionRepository,
@@ -95,8 +96,50 @@ describe('SessionService creation and presentation state', () => {
     ).toMatchObject({ status: 'delivered' });
   });
 
+  it('queues scaffold, result, and stable frames for every combat roll', async () => {
+    const { repository, service, sessionId } = await createReadySession(10);
+    const chooseId = async (choiceId: string, key: string) => {
+      const stored = await repository.get(sessionId);
+      if (!stored) throw new Error('Missing session.');
+      await service.acknowledgeDisplayed(sessionId, stored.state.revision);
+      const view = deriveView(stored.state);
+      const number = view.choices.find(
+        (choice) => choice.id === choiceId,
+      )?.number;
+      if (!number) throw new Error(`Missing choice ${choiceId}.`);
+      return service.submitCommand(
+        command(sessionId, key, stored.state.revision, number),
+      );
+    };
+
+    await chooseId(CHOICE_IDS.warrior, 'class');
+    await chooseId(CHOICE_IDS.north, 'north');
+    await chooseId(CHOICE_IDS.north, 'north-again');
+    await chooseId(CHOICE_IDS.east, 'enter-fight');
+
+    const intents = await repository.listPresentationIntents(sessionId);
+    expect(
+      intents.slice(-5).map(({ isStable, payload }) => ({
+        isStable,
+        kind: payload.kind,
+      })),
+    ).toEqual([
+      { isStable: false, kind: 'roll-scaffold' },
+      { isStable: false, kind: 'roll-result' },
+      { isStable: false, kind: 'roll-scaffold' },
+      { isStable: false, kind: 'roll-result' },
+      { isStable: true, kind: 'game-view' },
+    ]);
+    expect(intents.at(-5)?.payload).toMatchObject({
+      presentation: {
+        purpose: 'initiative',
+        verdict: 'FIRST: GHOUL',
+      },
+    });
+  });
+
   it('represents blocked and terminal-complete display states', async () => {
-    const { service, sessionId } = await createReadySession(10);
+    const { repository, service, sessionId } = await createReadySession(10);
     const blocked = await service.markDisplayBlocked(sessionId, 0);
     expect(blocked.view.display.status).toBe('blocked');
 
@@ -108,13 +151,34 @@ describe('SessionService creation and presentation state', () => {
     if (selected.kind !== 'response') return;
     expect(selected.response.view.display.status).toBe('locked');
 
-    const route = [1, 1, 2, 1, 1, 1, 1];
+    const route = [
+      CHOICE_IDS.north,
+      CHOICE_IDS.north,
+      CHOICE_IDS.east,
+      CHOICE_IDS.north,
+      CHOICE_IDS.north,
+      CHOICE_IDS.east,
+      CHOICE_IDS.east,
+    ];
     let terminal;
-    for (const [index, choice] of route.entries()) {
-      const version = index + 1;
+    let commandIndex = 0;
+    while (route.length > 0) {
+      const stored = await repository.get(sessionId);
+      if (!stored) throw new Error('Missing stored session.');
+      const gameView = deriveView(stored.state);
+      const desiredChoice =
+        gameView.kind === 'combat'
+          ? (gameView.choices.find((choice) => choice.id === CHOICE_IDS.smash)
+              ?.id ?? CHOICE_IDS.attack)
+          : route.shift()!;
+      const choice = gameView.choices.find(
+        (candidate) => candidate.id === desiredChoice,
+      )?.number;
+      if (!choice) throw new Error(`Missing choice ${desiredChoice}.`);
+      const version = stored.state.revision;
       await service.acknowledgeDisplayed(sessionId, version);
       terminal = await service.submitCommand(
-        command(sessionId, `move-${index}`, version, choice),
+        command(sessionId, `step-${commandIndex++}`, version, choice),
       );
     }
     if (!terminal) throw new Error('Missing terminal command result.');
@@ -123,7 +187,11 @@ describe('SessionService creation and presentation state', () => {
     expect(terminal.response.view.kind).toBe('victory');
     expect(terminal.response.view.display.status).toBe('locked');
 
-    const complete = await service.acknowledgeDisplayed(sessionId, 8);
+    if (terminal.kind !== 'response') return;
+    const complete = await service.acknowledgeDisplayed(
+      sessionId,
+      terminal.response.view.version,
+    );
     expect(complete.view.display).toEqual({
       status: 'complete',
       legalChoices: [],

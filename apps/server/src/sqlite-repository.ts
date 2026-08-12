@@ -10,8 +10,11 @@ import {
   deriveTitlePresentation,
   replayRun,
   type AcceptedCommandEntry,
+  type CombatNoticePresentation,
+  type GamePresentation,
   type GameView,
   type MapViewGrid,
+  type OpposedRollPresentation,
   type RunState,
 } from '@vestaquest/game';
 import { DuplicateSessionError, type SessionRepository } from './repository.js';
@@ -442,6 +445,7 @@ function parseAcceptedCommand(value: unknown): AcceptedCommandEntry {
     resultingPhase: requireEnum(entry.resultingPhase, [
       'class-select',
       'exploration',
+      'combat',
       'victory',
       'death',
     ] as const),
@@ -478,6 +482,25 @@ function parsePresentationPayload(json: string): PresentationPayload {
     }
     return Object.freeze(expected);
   }
+  if (payload.kind === 'roll-scaffold' || payload.kind === 'roll-result') {
+    requireKeys(payload, ['kind', 'presentation']);
+    const presentation = parseGamePresentation(payload.presentation);
+    if (presentation.kind !== 'opposed-roll') {
+      throw new PersistenceCorruptionError('roll presentation');
+    }
+    return Object.freeze({
+      kind: payload.kind,
+      presentation,
+    });
+  }
+  if (payload.kind === 'combat-notice') {
+    requireKeys(payload, ['kind', 'presentation']);
+    const presentation = parseGamePresentation(payload.presentation);
+    if (presentation.kind !== 'combat-notice') {
+      throw new PersistenceCorruptionError('combat notice presentation');
+    }
+    return Object.freeze({ kind: payload.kind, presentation });
+  }
   if (payload.kind !== 'game-view') {
     throw new PersistenceCorruptionError('presentation payload');
   }
@@ -488,11 +511,123 @@ function parsePresentationPayload(json: string): PresentationPayload {
   return Object.freeze({ kind: 'game-view', view });
 }
 
+function parseGamePresentation(value: unknown): GamePresentation {
+  const kind = requireRecord(value).kind;
+  if (kind === 'combat-notice') return parseCombatNotice(value);
+  const presentation = requireExactObject(value, [
+    'kind',
+    'purpose',
+    'prompt',
+    'left',
+    'right',
+    'verdict',
+  ]);
+  if (presentation.kind !== 'opposed-roll') {
+    throw new PersistenceCorruptionError('game presentation');
+  }
+  const verdict = requireString(presentation.verdict);
+  if (verdict.length < 1 || verdict.length > 22) {
+    throw new PersistenceCorruptionError('roll verdict');
+  }
+  const prompt = requireString(presentation.prompt);
+  if (prompt.length < 1 || prompt.length > 22) {
+    throw new PersistenceCorruptionError('roll prompt');
+  }
+  return Object.freeze({
+    kind: 'opposed-roll',
+    purpose: requireEnum(presentation.purpose, [
+      'initiative',
+      'attack',
+      'run',
+    ] as const),
+    prompt,
+    left: parseRollSide(presentation.left),
+    right: parseRollSide(presentation.right),
+    verdict,
+  });
+}
+
+function parseCombatNotice(value: unknown): CombatNoticePresentation {
+  const presentation = requireExactObject(value, [
+    'kind',
+    'heading',
+    'heroClass',
+    'hp',
+    'maximumHp',
+  ]);
+  if (presentation.kind !== 'combat-notice') {
+    throw new PersistenceCorruptionError('combat notice');
+  }
+  const hp = requireNonnegativeInteger(presentation.hp, 'hero HP');
+  const maximumHp = requirePositiveInteger(
+    presentation.maximumHp,
+    'hero maximum HP',
+  );
+  if (maximumHp > 5 || hp > maximumHp) {
+    throw new PersistenceCorruptionError('combat notice HP');
+  }
+  return Object.freeze({
+    kind: 'combat-notice',
+    heading: requireEnum(presentation.heading, [
+      'HEALED 1 HP',
+      'HEALED 2 HP',
+    ] as const),
+    heroClass: parseHeroClass(presentation.heroClass),
+    hp,
+    maximumHp,
+  });
+}
+
+function parseRollSide(value: unknown): OpposedRollPresentation['left'] {
+  const side = requireExactObject(value, [
+    'name',
+    'diceLabel',
+    'dice',
+    'modifierStat',
+    'modifier',
+    'total',
+  ]);
+  const diceLabel = requireEnum(side.diceLabel, ['D6', '2D6'] as const);
+  if (!Array.isArray(side.dice)) {
+    throw new PersistenceCorruptionError('roll dice');
+  }
+  const dice = Object.freeze(
+    side.dice.map((die) => {
+      const parsed = requirePositiveInteger(die, 'die result');
+      if (parsed > 6) throw new PersistenceCorruptionError('die result');
+      return parsed;
+    }),
+  );
+  if (dice.length !== (diceLabel === '2D6' ? 2 : 1)) {
+    throw new PersistenceCorruptionError('roll dice');
+  }
+  const modifier = requireNonnegativeInteger(side.modifier, 'roll modifier');
+  const total = requirePositiveInteger(side.total, 'roll total');
+  if (total !== dice[0]! + modifier) {
+    throw new PersistenceCorruptionError('roll total');
+  }
+  return Object.freeze({
+    name: requireEnum(side.name, [
+      'WARRIOR',
+      'ROGUE',
+      'WIZARD',
+      'GHOUL',
+      'SKELETON KNIGHT',
+    ] as const),
+    diceLabel,
+    dice,
+    modifierStat: requireEnum(side.modifierStat, ['P', 'D', 'S'] as const),
+    modifier,
+    total,
+  });
+}
+
 function parseGameView(value: unknown): GameView {
   const view = requireRecord(value);
   const kind = requireEnum(view.kind, [
     'class-select',
     'exploration',
+    'combat',
     'victory',
     'death',
   ] as const);
@@ -533,6 +668,8 @@ function parseGameView(value: unknown): GameView {
         'luck',
         'roomsFound',
         'directions',
+        'heldItem',
+        'canUseItem',
         'grid',
       ]);
       if (!Array.isArray(view.directions) || !Array.isArray(view.grid)) {
@@ -543,14 +680,25 @@ function parseGameView(value: unknown): GameView {
           requireEnum(direction, ['N', 'E', 'S', 'W'] as const),
         ),
       );
+      const canUseItem = requireBoolean(view.canUseItem, 'item usability');
+      const heldItem =
+        view.heldItem === null
+          ? null
+          : requireEnum(view.heldItem, ['HEAL'] as const);
+      const directionChoices = choices.slice(0, directions.length);
+      const itemChoice = choices[directions.length];
       if (
         directions.length < 1 ||
         directions.length > 4 ||
         new Set(directions).size !== directions.length ||
-        choices.some(
+        directionChoices.some(
           (choice, index) =>
             choice.number !== index + 1 || choice.label !== directions[index],
-        )
+        ) ||
+        choices.length !== directions.length + (canUseItem ? 1 : 0) ||
+        canUseItem !==
+          (itemChoice?.id === 'action.item' && itemChoice.label === 'HEAL') ||
+        (canUseItem && heldItem === null)
       ) {
         throw new PersistenceCorruptionError('exploration choices');
       }
@@ -567,7 +715,67 @@ function parseGameView(value: unknown): GameView {
         luck: requireNonnegativeInteger(view.luck, 'hero luck'),
         roomsFound: requirePositiveInteger(view.roomsFound, 'rooms found'),
         directions,
+        heldItem,
+        canUseItem,
         grid: parseMapGrid(view.grid),
+      });
+    }
+    case 'combat': {
+      requireKeys(view, [
+        'id',
+        'revision',
+        'choices',
+        'kind',
+        'heroClass',
+        'level',
+        'hp',
+        'maximumHp',
+        'enemyId',
+        'enemyName',
+        'enemyHp',
+        'enemyMaximumHp',
+        'smashAvailable',
+        'heldItem',
+      ]);
+      const enemyId = requireEnum(view.enemyId, [
+        'ghoul',
+        'skeleton-knight',
+      ] as const);
+      const enemyName = requireEnum(view.enemyName, [
+        'GHOUL',
+        'SKELETON KNIGHT',
+      ] as const);
+      if (
+        (enemyId === 'ghoul' && enemyName !== 'GHOUL') ||
+        (enemyId === 'skeleton-knight' && enemyName !== 'SKELETON KNIGHT') ||
+        choices.length < 2 ||
+        choices.length > 4 ||
+        choices.some((choice, index) => choice.number !== index + 1)
+      ) {
+        throw new PersistenceCorruptionError('combat view');
+      }
+      return Object.freeze({
+        ...base,
+        kind,
+        heroClass: parseHeroClass(view.heroClass),
+        level: requirePositiveInteger(view.level, 'hero level'),
+        hp: requireNonnegativeInteger(view.hp, 'hero HP'),
+        maximumHp: requirePositiveInteger(view.maximumHp, 'hero maximum HP'),
+        enemyId,
+        enemyName,
+        enemyHp: requirePositiveInteger(view.enemyHp, 'enemy HP'),
+        enemyMaximumHp: requirePositiveInteger(
+          view.enemyMaximumHp,
+          'enemy maximum HP',
+        ),
+        smashAvailable: requireBoolean(
+          view.smashAvailable,
+          'smash availability',
+        ),
+        heldItem:
+          view.heldItem === null
+            ? null
+            : requireEnum(view.heldItem, ['HEAL'] as const),
       });
     }
     case 'victory':
@@ -579,8 +787,9 @@ function parseGameView(value: unknown): GameView {
         'heroClass',
         'heading',
         'roomsFound',
+        'enemiesSlain',
       ]);
-      if (view.heading !== 'YOU ESCAPED')
+      if (view.heading !== 'YOU ESCAPED!')
         throw new PersistenceCorruptionError('game view');
       if (choices.length !== 0)
         throw new PersistenceCorruptionError('terminal choices');
@@ -588,8 +797,12 @@ function parseGameView(value: unknown): GameView {
         ...base,
         kind,
         heroClass: parseHeroClass(view.heroClass),
-        heading: 'YOU ESCAPED',
+        heading: 'YOU ESCAPED!',
         roomsFound: requirePositiveInteger(view.roomsFound, 'rooms found'),
+        enemiesSlain: requireNonnegativeInteger(
+          view.enemiesSlain,
+          'enemies slain',
+        ),
       });
     case 'death':
       requireKeys(view, [
@@ -600,9 +813,11 @@ function parseGameView(value: unknown): GameView {
         'heroClass',
         'heading',
         'cause',
-        'provisionalRoll',
+        'roomsFound',
+        'enemiesSlain',
+        'roomsUntilExit',
       ]);
-      if (view.heading !== 'YOU DIED' || view.cause !== 'THE DARKNESS') {
+      if (view.heading !== 'YOU DIED') {
         throw new PersistenceCorruptionError('game view');
       }
       if (choices.length !== 0)
@@ -612,10 +827,15 @@ function parseGameView(value: unknown): GameView {
         kind,
         heroClass: parseHeroClass(view.heroClass),
         heading: 'YOU DIED',
-        cause: 'THE DARKNESS',
-        provisionalRoll: requireInteger(
-          view.provisionalRoll,
-          'provisional roll',
+        cause: requireEnum(view.cause, ['GHOUL', 'SKELETON KNIGHT'] as const),
+        roomsFound: requirePositiveInteger(view.roomsFound, 'rooms found'),
+        enemiesSlain: requireNonnegativeInteger(
+          view.enemiesSlain,
+          'enemies slain',
+        ),
+        roomsUntilExit: requireNonnegativeInteger(
+          view.roomsUntilExit,
+          'rooms until exit',
         ),
       });
   }
@@ -636,6 +856,10 @@ function parseChoices(value: unknown) {
           'move.east',
           'move.south',
           'move.west',
+          'action.item',
+          'combat.attack',
+          'combat.smash',
+          'combat.run',
         ] as const),
         number: requirePositiveInteger(record.number, 'choice number'),
         label: requireString(record.label),
@@ -786,6 +1010,13 @@ function requireBooleanInteger(value: unknown): boolean {
   if (value === 0) return false;
   if (value === 1) return true;
   throw new PersistenceCorruptionError('boolean integer');
+}
+
+function requireBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw new PersistenceCorruptionError(label);
+  }
+  return value;
 }
 
 function requireEnum<const T extends readonly string[]>(

@@ -4,7 +4,12 @@ import type {
   IdempotencyKey,
   SessionId,
 } from '@vestaquest/contracts';
-import type { GameView, RunState, TitlePresentation } from '@vestaquest/game';
+import type {
+  GamePresentation,
+  GameView,
+  RunState,
+  TitlePresentation,
+} from '@vestaquest/game';
 
 export type SessionDisplayStatus = 'locked' | 'ready' | 'blocked' | 'complete';
 
@@ -19,6 +24,14 @@ export type StoredSession = Readonly<{
 
 export type PresentationPayload =
   | Readonly<{ kind: 'title'; presentation: TitlePresentation }>
+  | Readonly<{
+      kind: 'roll-scaffold' | 'roll-result';
+      presentation: Extract<GamePresentation, { kind: 'opposed-roll' }>;
+    }>
+  | Readonly<{
+      kind: 'combat-notice';
+      presentation: Extract<GamePresentation, { kind: 'combat-notice' }>;
+    }>
   | Readonly<{ kind: 'game-view'; view: GameView }>;
 
 export type PresentationIntent = Readonly<{

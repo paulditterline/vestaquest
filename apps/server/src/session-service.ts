@@ -194,20 +194,56 @@ export class SessionService {
         }
         outcome = 'accepted';
         const nextSequence = current.nextPresentationSequence;
+        const transientIntents: PresentationIntent[] = [];
+        let transientSequence = nextSequence;
+        for (const presentation of applied.presentations) {
+          if (presentation.kind === 'combat-notice') {
+            transientIntents.push(
+              this.#intent(
+                current.sessionId,
+                applied.state.revision,
+                transientSequence,
+                false,
+                { kind: 'combat-notice', presentation },
+              ),
+            );
+            transientSequence += 1;
+            continue;
+          }
+          transientIntents.push(
+            this.#intent(
+              current.sessionId,
+              applied.state.revision,
+              transientSequence,
+              false,
+              { kind: 'roll-scaffold', presentation },
+            ),
+            this.#intent(
+              current.sessionId,
+              applied.state.revision,
+              transientSequence + 1,
+              false,
+              { kind: 'roll-result', presentation },
+            ),
+          );
+          transientSequence += 2;
+        }
+        const stableSequence = nextSequence + transientIntents.length;
         const nextSession: StoredSession = Object.freeze({
           ...current,
           state: applied.state,
           displayStatus: 'locked',
-          nextPresentationSequence: nextSequence + 1,
+          nextPresentationSequence: stableSequence + 1,
           updatedAtMs: this.#clock.now(),
         });
         transition = Object.freeze({
           session: nextSession,
           presentationIntents: Object.freeze([
+            ...transientIntents,
             this.#intent(
               current.sessionId,
               applied.state.revision,
-              nextSequence,
+              stableSequence,
               true,
               { kind: 'game-view', view: applied.view },
             ),
