@@ -520,7 +520,7 @@ Acceptance:
 
 Branch: `codex/classes-and-loot`
 
-Status: **Active**. The first playable feature implements the Wizard's three-scroll pouch, spell submenu, Fireball/Lightning/Stun resolution, initial Ghoul and Skeleton Knight affinities, exact board views, persistence, and controller flow. Automated verification and owner Board Lab review passed on 2026-08-12. Rogue Steal/Unaware is next.
+Status: **Active**. The first playable feature implements the Wizard's three-scroll pouch, spell submenu, Fireball/Lightning/Stun resolution, initial Ghoul and Skeleton Knight affinities, exact board views, persistence, and controller flow. Automated verification and owner Board Lab review passed on 2026-08-12. Rogue Steal/Unaware and its first enemy-specific equipment rewards also passed owner Board Lab review on 2026-08-12.
 
 Build:
 
@@ -650,9 +650,9 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Merge the approved Wizard scroll feature PR.
-2. Continue Slice 6 with Rogue Steal/Unaware.
-3. Add compact equipment and loot flows.
+1. Commit, push, and merge the approved Rogue Steal feature.
+2. Run a focused topology-quality pass: add meaningful junctions/loops to the nine linear maps and tune shortest hidden-exit paths toward roughly ten meaningful locations.
+3. Expand compact equipment and non-Steal loot flows.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed

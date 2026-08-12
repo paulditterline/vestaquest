@@ -78,6 +78,25 @@ describe('semantic game-view renderers', () => {
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 
+  it('renders a stolen-loot replacement choice', () => {
+    const view: GameView = {
+      id: 'loot-review',
+      revision: 8,
+      kind: 'loot-select',
+      itemName: 'GHOUL FANG',
+      slot: 'WEAPON',
+      bonus: '+1 POWER',
+      equippedName: 'GHOUL FANG',
+      choices: [
+        { id: CHOICE_IDS.equipLoot, number: 1, label: 'EQUIP' },
+        { id: CHOICE_IDS.leaveLoot, number: 2, label: 'LEAVE' },
+      ],
+    };
+    const layout = renderGameView(view, 'black');
+    expect(isFlagshipLayout(layout)).toBe(true);
+    expect(snapshotLayout(layout)).toMatchSnapshot();
+  });
+
   it('renders the provisional exit outcome after the hidden room is found', () => {
     const view = escapeView();
     expect(view.kind).toBe('victory');

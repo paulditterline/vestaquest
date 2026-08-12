@@ -8,6 +8,8 @@ export {
 } from './game.js';
 export {
   ENEMIES,
+  ENEMY_STEAL_LOOT,
+  EQUIPMENT,
   HERO_STARTING_STATS,
   MAXIMUM_HERO_HP,
   MAXIMUM_LEVEL,
@@ -17,6 +19,7 @@ export {
 export type {
   EnemyDefinition,
   EnemyId,
+  EquipmentDefinition,
   HeroStats,
   SpellAffinity,
 } from './balance.js';
@@ -27,6 +30,7 @@ export {
   rollLightning,
   rollRun,
   rollSmash,
+  rollSteal,
   rollStun,
 } from './combat.js';
 export type {
@@ -35,6 +39,7 @@ export type {
   OpposedRoll,
   RunResult,
   SmashResult,
+  StealResult,
   StunResult,
 } from './combat.js';
 export { placeCoreEncounters, shortestRoomPath } from './encounters.js';
@@ -74,6 +79,8 @@ export type {
   DeathPhase,
   DeathView,
   DungeonRunState,
+  Equipment,
+  EquipmentItemId,
   EncounterRunState,
   ExplorationPhase,
   ExplorationView,
@@ -85,6 +92,7 @@ export type {
   MapCellViewState,
   MapViewGrid,
   MapViewRow,
+  LootSelectView,
   OpposedRollPresentation,
   RejectedCommandResult,
   RunPhase,

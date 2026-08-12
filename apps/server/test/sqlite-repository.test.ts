@@ -195,6 +195,51 @@ describe('SqliteSessionRepository', () => {
     await restarted.close();
   });
 
+  it('replays stolen Rogue equipment and Steal presentations after restart', async () => {
+    const path = await databasePath();
+    const repository = new SqliteSessionRepository(path);
+    const service = serviceFor(repository, 'rogue', 10);
+    const created = await service.createSession();
+    await service.acknowledgeDisplayed(created.sessionId, 0);
+
+    for (const [key, choice] of [
+      ['class', 2],
+      ['north', 1],
+      ['north-again', 1],
+      ['enter-fight', 2],
+      ['steal', 2],
+    ] as const) {
+      const current = await service.getSession(created.sessionId);
+      await service.acknowledgeDisplayed(
+        created.sessionId,
+        current.view.version,
+      );
+      await service.submitCommand(
+        command(created.sessionId, key, current.view.version, choice),
+      );
+    }
+    await repository.close();
+
+    const restarted = new SqliteSessionRepository(path);
+    const stored = await restarted.get(created.sessionId);
+    expect(stored?.state.phase).toMatchObject({
+      kind: 'combat',
+      stats: { power: 4 },
+      equipment: { weapon: 'ghoul-fang' },
+      stealUsed: true,
+    });
+    const intents = await restarted.listPresentationIntents(created.sessionId);
+    expect(
+      intents.some(
+        ({ payload }) =>
+          (payload.kind === 'roll-result' ||
+            payload.kind === 'roll-scaffold') &&
+          payload.presentation.purpose === 'steal',
+      ),
+    ).toBe(true);
+    await restarted.close();
+  });
+
   it('returns the original idempotency receipt after restart', async () => {
     const path = await databasePath();
     const firstRepository = new SqliteSessionRepository(path);

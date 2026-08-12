@@ -7,6 +7,7 @@ import type {
   GameChoice,
   GameView,
   HeroClass,
+  LootSelectView,
   OpposedRollPresentation,
   RollSidePresentation,
   SpellSelectView,
@@ -225,6 +226,39 @@ export function renderSpellSelectView(view: SpellSelectView): FlagshipLayout {
   return layout;
 }
 
+export function renderLootSelectView(view: LootSelectView): FlagshipLayout {
+  const choices = requireNumberedChoices(view.choices, 2);
+  if (choices[0]?.label !== 'EQUIP' || choices[1]?.label !== 'LEAVE') {
+    throw new TypeError('Loot selection requires Equip and Leave choices.');
+  }
+  let layout = writeText(createFlagshipLayout(), 'STOLEN LOOT', {
+    row: 0,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
+  layout = writeText(layout, view.itemName, {
+    row: 1,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
+  layout = writeText(layout, `${view.slot} ${view.bonus}`, {
+    row: 2,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
+  layout = writeText(layout, `CURRENT: ${view.equippedName}`, {
+    row: 3,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
+  layout = writeText(layout, '1 EQUIP', { row: 4, column: 0 });
+  return writeText(layout, '2 LEAVE', { row: 5, column: 0 });
+}
+
 export function renderOpposedRollScaffold(
   presentation: OpposedRollPresentation,
 ): FlagshipLayout {
@@ -306,6 +340,8 @@ export function renderGameView(
       return renderCombatView(view, shell);
     case 'spell-select':
       return renderSpellSelectView(view);
+    case 'loot-select':
+      return renderLootSelectView(view);
     case 'victory':
       return renderVictoryView(view);
     case 'death':

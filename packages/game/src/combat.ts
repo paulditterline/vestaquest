@@ -41,6 +41,13 @@ export type StunResult = Readonly<{
   rng: RngState;
 }>;
 
+export type StealResult = Readonly<{
+  roll: OpposedRoll;
+  stolen: boolean;
+  unaware: boolean;
+  rng: RngState;
+}>;
+
 export function rollInitiative(
   rng: RngState,
   heroSkill: number,
@@ -92,6 +99,21 @@ export function rollStun(
   return Object.freeze({
     roll: result.roll,
     stunned: result.roll.leftTotal > result.roll.rightTotal,
+    rng: result.rng,
+  });
+}
+
+export function rollSteal(
+  rng: RngState,
+  rogueSkill: number,
+  enemySkill: number,
+  unaware: boolean,
+): StealResult {
+  const result = rollOpposed(rng, rogueSkill + (unaware ? 1 : 0), enemySkill);
+  return Object.freeze({
+    roll: result.roll,
+    stolen: result.roll.leftTotal > result.roll.rightTotal,
+    unaware,
     rng: result.rng,
   });
 }
