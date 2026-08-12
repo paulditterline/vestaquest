@@ -137,6 +137,12 @@ Decision:
 - Ordinary discovered connections are traversable both ways. Resolved encounters do not retrigger. A green current-room marker takes display priority; after the player leaves, any resolved orange encounter marker underneath it becomes visible again.
 - Build ten authored topology templates with randomized content and a hidden exit. Each template has one entrance and multiple valid, suitably distant exit candidates; exactly one actual exit is selected secretly per run and is never shown before discovery.
 
+Quality follow-up, 2026-08-12:
+
+- Every authored topology must contain at least two ordinary-path junction rooms and at least one loop; a single corridor with cosmetic dead ends is not sufficient.
+- Hidden exits remain seven to ten shortest-path moves from the entrance, with a catalog-wide average of at least 8.5. A few tighter ring maps provide variety while deeper candidates carry most runs toward the ten-location target.
+- Branches and loops are explicit graph connections. Visual adjacency on the 5x5 display still never creates an implied passage.
+
 These decisions were reviewed in the exact 6x22 Board Lab on a black-shell presentation. The renderer also requires shell-aware contrast and snapshot coverage for a white-shell Flagship.
 
 ### Gate D — first balance model, before the complete combat slice
@@ -650,9 +656,10 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Commit, push, and merge the approved Rogue Steal feature.
-2. Run a focused topology-quality pass: add meaningful junctions/loops to the nine linear maps and tune shortest hidden-exit paths toward roughly ten meaningful locations.
-3. Expand compact equipment and non-Steal loot flows.
+1. Merge the topology-quality pass with enforced junction, loop, and hidden-exit pacing invariants.
+2. Expand compact equipment and non-Steal loot flows.
+3. Build the reusable dungeon-event state machine and first class-biased rooms.
+4. Research official Vestaboard art examples before prototyping the selected-hero, enemy-introduction, and exit-door interstitials for Slice 8.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed

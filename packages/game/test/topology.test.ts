@@ -17,17 +17,41 @@ describe('authored dungeon topology', () => {
       10,
     );
 
+    const exitDistances: number[] = [];
     for (const topology of AUTHORED_TOPOLOGIES) {
       expect(() => validateTopology(topology)).not.toThrow();
+      const roomDegrees = topology.rooms.map(
+        ({ connections }) =>
+          Object.values(connections).filter(
+            (connection) => connection?.kind === 'room',
+          ).length,
+      );
+      const ordinaryEdgeCount =
+        roomDegrees.reduce((total, degree) => total + degree, 0) / 2;
+
+      expect(
+        roomDegrees.filter((degree) => degree >= 3).length,
+        `${topology.id} should offer multiple real junctions`,
+      ).toBeGreaterThanOrEqual(2);
+      expect(
+        ordinaryEdgeCount,
+        `${topology.id} should contain at least one loop`,
+      ).toBeGreaterThanOrEqual(topology.rooms.length);
       for (const roomId of topology.exitCandidateRoomIds) {
-        expect(
-          shortestRoomDistance(topology, topology.entranceRoomId, roomId),
-        ).toBeGreaterThanOrEqual(7);
-        expect(
-          shortestRoomDistance(topology, topology.entranceRoomId, roomId),
-        ).toBeLessThanOrEqual(10);
+        const distance = shortestRoomDistance(
+          topology,
+          topology.entranceRoomId,
+          roomId,
+        );
+        exitDistances.push(distance);
+        expect(distance).toBeGreaterThanOrEqual(7);
+        expect(distance).toBeLessThanOrEqual(10);
       }
     }
+    expect(
+      exitDistances.reduce((total, distance) => total + distance, 0) /
+        exitDistances.length,
+    ).toBeGreaterThanOrEqual(8.5);
   });
 
   it('selects every authored map deterministically from golden seeds', () => {
@@ -37,16 +61,16 @@ describe('authored dungeon topology', () => {
         return [selected.topologyId, selected.exitRoomId, selected.rng.draws];
       }),
     ).toEqual([
-      ['black-chapel', 'R9', 2],
-      ['mourning-path', 'R7', 2],
-      ['iron-gauntlet', 'R22', 2],
-      ['hollow-eye', 'R8', 2],
+      ['black-chapel', 'R14', 2],
+      ['mourning-path', 'R10', 2],
+      ['iron-gauntlet', 'R4', 2],
+      ['hollow-eye', 'R10', 2],
       ['broken-crown', 'R9', 2],
-      ['serpent-vault', 'R22', 2],
+      ['serpent-vault', 'R1', 2],
       ['witch-ring', 'R1', 2],
-      ['flooded-steps', 'R7', 2],
-      ['bone-spiral', 'R9', 2],
-      ['crooked-halls', 'H', 2],
+      ['flooded-steps', 'R10', 2],
+      ['bone-spiral', 'R8', 2],
+      ['crooked-halls', 'L', 2],
     ]);
   });
 

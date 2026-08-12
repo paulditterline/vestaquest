@@ -82,7 +82,7 @@ function deadEnd(row: number, column: number): RoomConnection {
 export const CROOKED_HALLS: DungeonTopology = Object.freeze({
   id: 'crooked-halls',
   entranceRoomId: 'A',
-  exitCandidateRoomIds: Object.freeze(['H', 'K', 'M']),
+  exitCandidateRoomIds: Object.freeze(['L', 'K', 'M']),
   rooms: Object.freeze([
     room('A', 4, 0, { N: path('B'), E: deadEnd(4, 1) }),
     room('B', 3, 0, { N: path('C'), S: path('A') }),
@@ -115,6 +115,11 @@ type PathTopologyDefinition = Readonly<{
   positions: readonly GridPosition[];
   entranceIndex: number;
   exitIndexes: readonly number[];
+  extraConnections?: readonly (readonly [number, number])[];
+  branchRooms?: readonly Readonly<{
+    roomIndex: number;
+    position: GridPosition;
+  }>[];
   deadEnds?: readonly Readonly<{
     roomIndex: number;
     position: GridPosition;
@@ -127,6 +132,22 @@ function pathTopology(definition: PathTopologyDefinition): DungeonTopology {
   for (let index = 1; index < definition.positions.length; index += 1) {
     connectPath(definition.positions, connections, index - 1, index);
   }
+  for (const [leftIndex, rightIndex] of definition.extraConnections ?? []) {
+    connectPath(definition.positions, connections, leftIndex, rightIndex);
+  }
+  const branchRooms = (definition.branchRooms ?? []).map((branch, index) => {
+    const origin = definition.positions[branch.roomIndex];
+    if (!origin) throw new RangeError('Branch references an unknown room.');
+    const direction = directionBetween(origin, branch.position);
+    if (connections[branch.roomIndex]![direction]) {
+      throw new RangeError('Branch conflicts with an ordinary path.');
+    }
+    const branchId = `B${index}`;
+    connections[branch.roomIndex]![direction] = path(branchId);
+    return room(branchId, branch.position.row, branch.position.column, {
+      [REVERSE_DIRECTION[direction]]: path(pathRoomId(branch.roomIndex)),
+    });
+  });
   for (const ending of definition.deadEnds ?? []) {
     const origin = definition.positions[ending.roomIndex];
     if (!origin) throw new RangeError('Dead end references an unknown room.');
@@ -144,8 +165,8 @@ function pathTopology(definition: PathTopologyDefinition): DungeonTopology {
     id: definition.id,
     entranceRoomId: pathRoomId(definition.entranceIndex),
     exitCandidateRoomIds: Object.freeze(definition.exitIndexes.map(pathRoomId)),
-    rooms: Object.freeze(
-      definition.positions.map((position, index) =>
+    rooms: Object.freeze([
+      ...definition.positions.map((position, index) =>
         room(
           pathRoomId(index),
           position.row,
@@ -153,7 +174,8 @@ function pathTopology(definition: PathTopologyDefinition): DungeonTopology {
           connections[index]!,
         ),
       ),
-    ),
+      ...branchRooms,
+    ]),
   });
   validateTopology(topology);
   return topology;
@@ -196,7 +218,7 @@ function pathRoomId(index: number): RoomId {
 const BONE_SPIRAL = pathTopology({
   id: 'bone-spiral',
   entranceIndex: 0,
-  exitIndexes: [7, 9, 10],
+  exitIndexes: [7, 8, 9],
   positions: [
     { row: 4, column: 4 },
     { row: 4, column: 3 },
@@ -215,10 +237,13 @@ const BONE_SPIRAL = pathTopology({
     { row: 2, column: 4 },
     { row: 3, column: 4 },
   ],
-  deadEnds: [
-    { roomIndex: 1, position: { row: 3, column: 3 } },
+  extraConnections: [[15, 0]],
+  branchRooms: [
     { roomIndex: 5, position: { row: 3, column: 1 } },
     { roomIndex: 10, position: { row: 1, column: 2 } },
+  ],
+  deadEnds: [
+    { roomIndex: 1, position: { row: 3, column: 3 } },
     { roomIndex: 13, position: { row: 1, column: 3 } },
   ],
 });
@@ -226,7 +251,7 @@ const BONE_SPIRAL = pathTopology({
 const FLOODED_STEPS = pathTopology({
   id: 'flooded-steps',
   entranceIndex: 0,
-  exitIndexes: [7, 9, 10],
+  exitIndexes: [10, 14, 9],
   positions: [
     { row: 0, column: 0 },
     { row: 0, column: 1 },
@@ -245,6 +270,10 @@ const FLOODED_STEPS = pathTopology({
     { row: 4, column: 4 },
     { row: 3, column: 4 },
     { row: 2, column: 4 },
+  ],
+  extraConnections: [
+    [7, 12],
+    [8, 11],
   ],
   deadEnds: [
     { roomIndex: 0, position: { row: 1, column: 0 } },
@@ -277,10 +306,13 @@ const WITCH_RING = pathTopology({
     { row: 2, column: 0 },
     { row: 1, column: 0 },
   ],
-  deadEnds: [
+  extraConnections: [[0, 15]],
+  branchRooms: [
     { roomIndex: 2, position: { row: 1, column: 2 } },
-    { roomIndex: 6, position: { row: 2, column: 3 } },
     { roomIndex: 10, position: { row: 3, column: 2 } },
+  ],
+  deadEnds: [
+    { roomIndex: 6, position: { row: 2, column: 3 } },
     { roomIndex: 14, position: { row: 2, column: 1 } },
   ],
 });
@@ -288,7 +320,7 @@ const WITCH_RING = pathTopology({
 const SERPENT_VAULT = pathTopology({
   id: 'serpent-vault',
   entranceIndex: 12,
-  exitIndexes: [4, 20, 22],
+  exitIndexes: [0, 24, 1],
   positions: [
     { row: 4, column: 0 },
     { row: 3, column: 0 },
@@ -316,12 +348,17 @@ const SERPENT_VAULT = pathTopology({
     { row: 1, column: 4 },
     { row: 0, column: 4 },
   ],
+  extraConnections: [
+    [0, 3],
+    [2, 5],
+    [18, 21],
+  ],
 });
 
 const BROKEN_CROWN = pathTopology({
   id: 'broken-crown',
   entranceIndex: 0,
-  exitIndexes: [7, 9, 10],
+  exitIndexes: [8, 9, 10],
   positions: [
     { row: 4, column: 2 },
     { row: 4, column: 1 },
@@ -343,6 +380,11 @@ const BROKEN_CROWN = pathTopology({
     { row: 3, column: 4 },
     { row: 4, column: 4 },
     { row: 4, column: 3 },
+  ],
+  extraConnections: [
+    [0, 19],
+    [7, 10],
+    [14, 17],
   ],
   deadEnds: [
     { roomIndex: 1, position: { row: 4, column: 0 } },
@@ -355,7 +397,7 @@ const BROKEN_CROWN = pathTopology({
 const HOLLOW_EYE = pathTopology({
   id: 'hollow-eye',
   entranceIndex: 0,
-  exitIndexes: [8, 9, 10],
+  exitIndexes: [10, 9, 11],
   positions: [
     { row: 2, column: 2 },
     { row: 2, column: 1 },
@@ -378,6 +420,11 @@ const HOLLOW_EYE = pathTopology({
     { row: 0, column: 4 },
     { row: 1, column: 4 },
     { row: 2, column: 4 },
+  ],
+  extraConnections: [
+    [4, 19],
+    [11, 8],
+    [16, 3],
   ],
   deadEnds: [
     { roomIndex: 9, position: { row: 4, column: 2 } },
@@ -388,7 +435,7 @@ const HOLLOW_EYE = pathTopology({
 const IRON_GAUNTLET = pathTopology({
   id: 'iron-gauntlet',
   entranceIndex: 12,
-  exitIndexes: [4, 20, 22],
+  exitIndexes: [24, 23, 4],
   positions: [
     { row: 0, column: 0 },
     { row: 1, column: 0 },
@@ -416,12 +463,17 @@ const IRON_GAUNTLET = pathTopology({
     { row: 3, column: 4 },
     { row: 4, column: 4 },
   ],
+  extraConnections: [
+    [0, 3],
+    [1, 8],
+    [18, 21],
+  ],
 });
 
 const MOURNING_PATH = pathTopology({
   id: 'mourning-path',
   entranceIndex: 0,
-  exitIndexes: [7, 9, 10],
+  exitIndexes: [10, 12, 14],
   positions: [
     { row: 4, column: 4 },
     { row: 3, column: 4 },
@@ -440,6 +492,11 @@ const MOURNING_PATH = pathTopology({
     { row: 2, column: 0 },
     { row: 1, column: 0 },
     { row: 0, column: 0 },
+  ],
+  extraConnections: [
+    [12, 9],
+    [13, 8],
+    [16, 11],
   ],
   deadEnds: [
     { roomIndex: 6, position: { row: 4, column: 1 } },
@@ -452,7 +509,7 @@ const MOURNING_PATH = pathTopology({
 const BLACK_CHAPEL = pathTopology({
   id: 'black-chapel',
   entranceIndex: 0,
-  exitIndexes: [7, 9, 10],
+  exitIndexes: [10, 14, 16],
   positions: [
     { row: 4, column: 2 },
     { row: 3, column: 2 },
@@ -471,6 +528,11 @@ const BLACK_CHAPEL = pathTopology({
     { row: 2, column: 0 },
     { row: 1, column: 0 },
     { row: 0, column: 0 },
+  ],
+  extraConnections: [
+    [13, 10],
+    [14, 9],
+    [15, 8],
   ],
   deadEnds: [
     { roomIndex: 0, position: { row: 4, column: 3 } },

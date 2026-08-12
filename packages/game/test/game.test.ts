@@ -51,10 +51,12 @@ function escapeCrookedHalls(seed = 10): RunState {
     CHOICE_IDS.north,
     CHOICE_IDS.north,
     CHOICE_IDS.east,
-    CHOICE_IDS.north,
-    CHOICE_IDS.north,
+    CHOICE_IDS.south,
     CHOICE_IDS.east,
     CHOICE_IDS.east,
+    CHOICE_IDS.north,
+    CHOICE_IDS.east,
+    CHOICE_IDS.south,
   ]) {
     state = accept(state, `move-${state.revision}`, choiceId);
     while (state.phase.kind === 'combat') {
@@ -124,7 +126,7 @@ describe('map exploration game kernel', () => {
       heroClass,
       dungeon: {
         topologyId: 'crooked-halls',
-        exitRoomId: 'H',
+        exitRoomId: 'L',
         currentRoomId: 'A',
         visitedRoomIds: ['A'],
         revealedDeadEndPositions: [],
@@ -640,7 +642,7 @@ describe('map exploration game kernel', () => {
       cause: 'GHOUL',
       roomsFound: 4,
       enemiesSlain: 0,
-      roomsUntilExit: 4,
+      roomsUntilExit: 6,
     });
   });
 
@@ -649,13 +651,13 @@ describe('map exploration game kernel', () => {
     expect(terminal.phase).toEqual({
       kind: 'victory',
       heroClass: 'warrior',
-      roomsFound: 8,
+      roomsFound: 10,
       enemiesSlain: 3,
     });
     expect(deriveView(terminal)).toMatchObject({
       kind: 'victory',
       heading: 'YOU ESCAPED!',
-      roomsFound: 8,
+      roomsFound: 10,
       enemiesSlain: 3,
       choices: [],
     });
