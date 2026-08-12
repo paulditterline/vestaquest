@@ -155,10 +155,12 @@ describe('SessionService creation and presentation state', () => {
       CHOICE_IDS.north,
       CHOICE_IDS.north,
       CHOICE_IDS.east,
-      CHOICE_IDS.north,
-      CHOICE_IDS.north,
+      CHOICE_IDS.south,
       CHOICE_IDS.east,
       CHOICE_IDS.east,
+      CHOICE_IDS.north,
+      CHOICE_IDS.east,
+      CHOICE_IDS.south,
     ];
     let terminal;
     let commandIndex = 0;

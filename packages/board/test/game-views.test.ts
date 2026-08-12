@@ -160,10 +160,12 @@ function escapeView(): GameView {
     CHOICE_IDS.north,
     CHOICE_IDS.north,
     CHOICE_IDS.east,
-    CHOICE_IDS.north,
-    CHOICE_IDS.north,
+    CHOICE_IDS.south,
     CHOICE_IDS.east,
     CHOICE_IDS.east,
+    CHOICE_IDS.north,
+    CHOICE_IDS.east,
+    CHOICE_IDS.south,
   ]) {
     state = choose(state, direction, `move-${state.revision}`);
     while (state.phase.kind === 'combat') {
