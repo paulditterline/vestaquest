@@ -45,6 +45,16 @@ export type {
 } from './combat.js';
 export { placeCoreEncounters, shortestRoomPath } from './encounters.js';
 export type { EncounterPlacement, PlacedEncounter } from './encounters.js';
+export { EVENT_IDS, validateEventDefinition } from './events.js';
+export type {
+  EventCheckStat,
+  EventChoiceDefinition,
+  EventChoiceResolution,
+  EventDefinition,
+  EventDestination,
+  EventId,
+  EventNodeDefinition,
+} from './events.js';
 export { RNG_VERSION, createRng, nextUint32, rollDie } from './rng.js';
 export {
   AUTHORED_TOPOLOGIES,

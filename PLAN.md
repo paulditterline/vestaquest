@@ -548,6 +548,8 @@ Acceptance:
 
 Branch: `codex/dungeon-events`
 
+Status: **Active**. The first scaffold defines and validates finite authored event graphs with one-to-four numbered choices, immediate or visible opposed-check branches, explicit terminal outcomes, and truth-tagged transient clues. It deliberately does not settle room danger values, rewards, or outcome tables.
+
 Build:
 
 - Reusable multi-step event state machine with numbered choices and visible opposed checks.
