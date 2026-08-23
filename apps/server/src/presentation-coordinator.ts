@@ -127,10 +127,7 @@ export class PresentationCoordinator {
       case 'roll-scaffold':
         return renderOpposedRollScaffold(intent.payload.presentation);
       case 'roll-result':
-        return renderOpposedRollResult(
-          intent.payload.presentation,
-          this.#shell,
-        );
+        return renderOpposedRollResult(intent.payload.presentation);
       case 'combat-notice':
         return renderCombatNotice(intent.payload.presentation, this.#shell);
       case 'game-view':

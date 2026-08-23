@@ -83,10 +83,31 @@ describe('semantic game-view renderers', () => {
       id: 'loot-review',
       revision: 8,
       kind: 'loot-select',
+      heading: 'STOLEN LOOT',
       itemName: 'GHOUL FANG',
       slot: 'WEAPON',
       bonus: '+1 POWER',
       equippedName: 'GHOUL FANG',
+      choices: [
+        { id: CHOICE_IDS.equipLoot, number: 1, label: 'EQUIP' },
+        { id: CHOICE_IDS.leaveLoot, number: 2, label: 'LEAVE' },
+      ],
+    };
+    const layout = renderGameView(view, 'black');
+    expect(isFlagshipLayout(layout)).toBe(true);
+    expect(snapshotLayout(layout)).toMatchSnapshot();
+  });
+
+  it('renders class-specific battle loot against an empty slot', () => {
+    const view: GameView = {
+      id: 'battle-loot-review',
+      revision: 9,
+      kind: 'loot-select',
+      heading: 'BATTLE LOOT',
+      itemName: 'IRON SWORD',
+      slot: 'WEAPON',
+      bonus: '+1 POWER',
+      equippedName: 'EMPTY',
       choices: [
         { id: CHOICE_IDS.equipLoot, number: 1, label: 'EQUIP' },
         { id: CHOICE_IDS.leaveLoot, number: 2, label: 'LEAVE' },
@@ -105,7 +126,7 @@ describe('semantic game-view renderers', () => {
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 
-  it('renders actual opposed-roll scaffolds and results on both shells', () => {
+  it('renders actual opposed-roll scaffolds and results with period trails', () => {
     const presentation: GamePresentation = {
       kind: 'opposed-roll',
       purpose: 'initiative',
@@ -131,11 +152,10 @@ describe('semantic game-view renderers', () => {
     expect(
       snapshotLayout(renderOpposedRollScaffold(presentation)),
     ).toMatchSnapshot();
-    for (const shell of ['black', 'white'] as const) {
-      expect(
-        snapshotLayout(renderOpposedRollResult(presentation, shell)),
-      ).toMatchSnapshot();
-    }
+    const result = renderOpposedRollResult(presentation);
+    expect(result[1]?.slice(3, 7)).toEqual([56, 56, 56, 56]);
+    expect(result[3]?.slice(3, 7)).toEqual([56, 56, 56, 56]);
+    expect(snapshotLayout(result)).toMatchSnapshot();
   });
 
   it('renders a healing result before the enemy response', () => {
@@ -171,8 +191,10 @@ function escapeView(): GameView {
     while (state.phase.kind === 'combat') {
       const view = deriveView(state);
       const action =
-        view.choices.find((choice) => choice.id === CHOICE_IDS.smash)?.id ??
-        CHOICE_IDS.attack;
+        view.kind === 'loot-select'
+          ? CHOICE_IDS.equipLoot
+          : (view.choices.find((choice) => choice.id === CHOICE_IDS.smash)
+              ?.id ?? CHOICE_IDS.attack);
       state = choose(state, action, `fight-${state.revision}`);
     }
   }

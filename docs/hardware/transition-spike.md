@@ -58,4 +58,14 @@ For each Digital and physical run, record:
 - any Quiet Hours or competing-message behavior;
 - keep, reject, or retest recommendation.
 
+### Recorded competing-message finding — 2026-08-23
+
+- Target: owner's black-shell physical Flagship through the Cloud API.
+- Fixture: two-frame Classic/Fast initiative check for the four-period roll trail.
+- A scheduled riddle arrived between the scaffold and result writes. Cloud blocked the queued initiative result rather than allowing VestaQuest to overwrite the competing message.
+- The harness restored and verified the owner's original transition preference and removed its recovery interlock despite the blocked result.
+- After the scheduled message completed, an explicit retry delivered both frames and restored the transition preference successfully.
+- The owner accepted the lighter four-period roll trail on the physical board after that successful retry.
+- Private-alpha test documentation should include a reversible owner-controlled test window for competing scheduled content if Vestaboard's supported controls permit one. Runtime behavior must continue to detect/report interruption rather than start a write war.
+
 Do not put tokens, headers, board identifiers, screenshots containing secrets, or recovery files in the repository.

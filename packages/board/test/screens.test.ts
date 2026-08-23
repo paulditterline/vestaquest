@@ -233,8 +233,8 @@ describe('VestaQuest screen fixtures', () => {
     )!;
     const scaffold = fixture.frames[0]!.layout;
     const result = fixture.frames[1]!.layout;
-    expect(result[1].slice(3, 7)).toEqual([69, 69, 69, 69]);
-    expect(result[3].slice(3, 7)).toEqual([69, 69, 69, 69]);
+    expect(result[1].slice(3, 7)).toEqual([56, 56, 56, 56]);
+    expect(result[3].slice(3, 7)).toEqual([56, 56, 56, 56]);
     expect(result[1][8]).toBe(30);
     expect(result[3][8]).toBe(31);
     expect(result[5].findIndex((code) => code !== 0)).toBe(9);

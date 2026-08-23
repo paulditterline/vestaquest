@@ -847,6 +847,7 @@ function parseGameView(value: unknown): GameView {
         'revision',
         'choices',
         'kind',
+        'heading',
         'itemName',
         'slot',
         'bonus',
@@ -863,15 +864,32 @@ function parseGameView(value: unknown): GameView {
       return Object.freeze({
         ...base,
         kind,
+        heading: requireEnum(view.heading, [
+          'STOLEN LOOT',
+          'BATTLE LOOT',
+        ] as const),
         itemName: requireEnum(view.itemName, [
           'GHOUL FANG',
           'BONE MAIL',
+          'IRON SWORD',
+          'CHAIN MAIL',
+          'SHADOW KNIFE',
+          'NIGHT CLOAK',
+          'ASH WAND',
+          'RUNE ROBE',
         ] as const),
         slot: requireEnum(view.slot, ['WEAPON', 'ARMOR'] as const),
         bonus: requireEnum(view.bonus, ['+1 POWER', '+1 DEFENSE'] as const),
         equippedName: requireEnum(view.equippedName, [
+          'EMPTY',
           'GHOUL FANG',
           'BONE MAIL',
+          'IRON SWORD',
+          'CHAIN MAIL',
+          'SHADOW KNIFE',
+          'NIGHT CLOAK',
+          'ASH WAND',
+          'RUNE ROBE',
         ] as const),
       });
     }

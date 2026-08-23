@@ -62,8 +62,10 @@ function escapeCrookedHalls(seed = 10): RunState {
     while (state.phase.kind === 'combat') {
       const view = deriveView(state);
       const action =
-        view.choices.find((choice) => choice.id === CHOICE_IDS.smash)?.id ??
-        CHOICE_IDS.attack;
+        view.kind === 'loot-select'
+          ? CHOICE_IDS.equipLoot
+          : (view.choices.find((choice) => choice.id === CHOICE_IDS.smash)
+              ?.id ?? CHOICE_IDS.attack);
       state = accept(state, `fight-${state.revision}`, action);
     }
   }
@@ -287,9 +289,25 @@ describe('map exploration game kernel', () => {
 
     state = accept(state, 'smash', CHOICE_IDS.smash);
     expect(state.phase).toMatchObject({
-      kind: 'exploration',
+      kind: 'combat',
+      menu: 'loot',
+      pendingLoot: 'iron-sword',
       enemiesSlain: 1,
       dungeon: { currentRoomId: 'D' },
+    });
+    expect(deriveView(state)).toMatchObject({
+      kind: 'loot-select',
+      heading: 'BATTLE LOOT',
+      itemName: 'IRON SWORD',
+      slot: 'WEAPON',
+      bonus: '+1 POWER',
+      equippedName: 'EMPTY',
+    });
+    state = accept(state, 'equip-sword', CHOICE_IDS.equipLoot);
+    expect(state.phase).toMatchObject({
+      kind: 'exploration',
+      equipment: { weapon: 'iron-sword', armor: null },
+      stats: { power: 7 },
     });
     if (state.phase.kind !== 'exploration') throw new Error('Expected map.');
     expect(
@@ -418,9 +436,23 @@ describe('map exploration game kernel', () => {
       },
     ]);
     expect(cast.state.phase).toMatchObject({
-      kind: 'exploration',
+      kind: 'combat',
+      menu: 'loot',
+      pendingLoot: 'ash-wand',
       scrollPouch: ['lightning', 'stun'],
       enemiesSlain: 1,
+    });
+    expect(deriveView(cast.state)).toMatchObject({
+      kind: 'loot-select',
+      heading: 'BATTLE LOOT',
+      itemName: 'ASH WAND',
+      equippedName: 'EMPTY',
+    });
+    const left = accept(cast.state, 'leave-wand', CHOICE_IDS.leaveLoot);
+    expect(left.phase).toMatchObject({
+      kind: 'exploration',
+      equipment: { weapon: null, armor: null },
+      scrollPouch: ['lightning', 'stun'],
     });
   });
 
@@ -600,6 +632,40 @@ describe('map exploration game kernel', () => {
       equipment: { weapon: 'ghoul-fang' },
       enemyHasActed: true,
     });
+  });
+
+  it('can leave battle loot without reviving the defeated enemy turn', () => {
+    let state = beginExploration(10);
+    state = accept(state, 'north', CHOICE_IDS.north);
+    state = accept(state, 'north-again', CHOICE_IDS.north);
+    state = accept(state, 'east', CHOICE_IDS.east);
+    if (state.phase.kind !== 'combat') throw new Error('Expected combat.');
+    state = {
+      ...state,
+      phase: {
+        ...state.phase,
+        equipment: { weapon: 'ghoul-fang', armor: null },
+        stats: { ...state.phase.stats, power: state.phase.stats.power + 1 },
+      },
+    };
+
+    state = accept(state, 'smash-with-gear', CHOICE_IDS.smash);
+    expect(deriveView(state)).toMatchObject({
+      kind: 'loot-select',
+      heading: 'BATTLE LOOT',
+      itemName: 'IRON SWORD',
+      equippedName: 'GHOUL FANG',
+    });
+    const left = accept(state, 'leave-battle-loot', CHOICE_IDS.leaveLoot);
+    expect(left.phase).toMatchObject({
+      kind: 'exploration',
+      enemiesSlain: 1,
+      equipment: { weapon: 'ghoul-fang', armor: null },
+    });
+    if (left.phase.kind !== 'exploration') throw new Error('Expected map.');
+    expect(
+      left.phase.dungeon.encounters.find(({ roomId }) => roomId === 'D'),
+    ).toMatchObject({ currentHp: 0, status: 'resolved' });
   });
 
   it('retreats to the prior room and preserves the wounded active threat', () => {

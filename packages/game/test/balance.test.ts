@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CLASS_BATTLE_LOOT,
   ENEMIES,
+  EQUIPMENT,
   HERO_STARTING_STATS,
   advanceHeroForRooms,
   targetLevelForRooms,
@@ -82,5 +84,25 @@ describe('approved Gate D balance data', () => {
         7,
       ),
     ).toMatchObject({ level: 3, hp: 4, maximumHp: 4, power: 6 });
+  });
+
+  it('defines one class-safe weapon and armor reward per class', () => {
+    expect(CLASS_BATTLE_LOOT).toEqual({
+      warrior: { ghoul: 'iron-sword', 'skeleton-knight': 'chain-mail' },
+      rogue: { ghoul: 'shadow-knife', 'skeleton-knight': 'night-cloak' },
+      wizard: { ghoul: 'ash-wand', 'skeleton-knight': 'rune-robe' },
+    });
+    for (const table of Object.values(CLASS_BATTLE_LOOT)) {
+      expect(EQUIPMENT[table.ghoul]).toMatchObject({
+        slot: 'weapon',
+        stat: 'power',
+        bonus: 1,
+      });
+      expect(EQUIPMENT[table['skeleton-knight']]).toMatchObject({
+        slot: 'armor',
+        stat: 'defense',
+        bonus: 1,
+      });
+    }
   });
 });

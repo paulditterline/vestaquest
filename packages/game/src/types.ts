@@ -5,7 +5,7 @@ import type { OpposedRoll } from './combat.js';
 import type { Direction, RoomId } from './topology.js';
 
 export const GAME_STATE_VERSION = 5 as const;
-export const GAME_RULES_VERSION = 'rogue-steal-v1' as const;
+export const GAME_RULES_VERSION = 'class-loot-v1' as const;
 
 export const HERO_CLASSES = ['warrior', 'rogue', 'wizard'] as const;
 export type HeroClass = (typeof HERO_CLASSES)[number];
@@ -46,7 +46,24 @@ export type GameCommand = ChooseCommand;
 export const SCROLL_IDS = ['fireball', 'lightning', 'stun'] as const;
 export type ScrollId = (typeof SCROLL_IDS)[number];
 export type ScrollPouch = readonly ScrollId[];
-export type EquipmentItemId = 'ghoul-fang' | 'bone-mail';
+export type EquipmentItemId =
+  | 'ghoul-fang'
+  | 'bone-mail'
+  | 'iron-sword'
+  | 'chain-mail'
+  | 'shadow-knife'
+  | 'night-cloak'
+  | 'ash-wand'
+  | 'rune-robe';
+export type EquipmentItemName =
+  | 'GHOUL FANG'
+  | 'BONE MAIL'
+  | 'IRON SWORD'
+  | 'CHAIN MAIL'
+  | 'SHADOW KNIFE'
+  | 'NIGHT CLOAK'
+  | 'ASH WAND'
+  | 'RUNE ROBE';
 export type Equipment = Readonly<{
   weapon: EquipmentItemId | null;
   armor: EquipmentItemId | null;
@@ -229,10 +246,11 @@ export interface SpellSelectView extends BaseGameView {
 
 export interface LootSelectView extends BaseGameView {
   readonly kind: 'loot-select';
-  readonly itemName: 'GHOUL FANG' | 'BONE MAIL';
+  readonly heading: 'STOLEN LOOT' | 'BATTLE LOOT';
+  readonly itemName: EquipmentItemName;
   readonly slot: 'WEAPON' | 'ARMOR';
   readonly bonus: '+1 POWER' | '+1 DEFENSE';
-  readonly equippedName: 'GHOUL FANG' | 'BONE MAIL';
+  readonly equippedName: EquipmentItemName | 'EMPTY';
 }
 
 export interface VictoryView extends BaseGameView {
