@@ -23,7 +23,7 @@ test('switches fixtures, reveal frames, and physical shell', async ({
   await page.getByRole('button', { name: 'Roll result' }).click();
 
   await expect(page.getByText('Goblin goes first.')).toBeVisible();
-  await expect(page.locator('.flap-cell[data-code="69"]')).toHaveCount(8);
+  await expect(page.locator('.flap-cell[data-code="56"]')).toHaveCount(8);
   await expect(page).toHaveURL(/fixture=initiative/);
 
   await page.getByRole('button', { name: 'white' }).click();
