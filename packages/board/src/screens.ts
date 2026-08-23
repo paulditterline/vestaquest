@@ -159,8 +159,8 @@ export function renderInitiativeScaffold(): FlagshipLayout {
 export function renderInitiativeResult(): FlagshipLayout {
   let layout = renderInitiativeScaffold();
   const rollCells = [3, 4, 5, 6].flatMap((column) => [
-    { row: 1, column, code: CHARACTER_CODE.WHITE },
-    { row: 3, column, code: CHARACTER_CODE.WHITE },
+    { row: 1, column, code: CHARACTER_CODE.PERIOD },
+    { row: 3, column, code: CHARACTER_CODE.PERIOD },
   ]);
   layout = withCells(layout, rollCells);
   layout = writeText(layout, '4', { row: 1, column: 8 });

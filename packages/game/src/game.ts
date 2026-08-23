@@ -1,5 +1,6 @@
 import { createRng } from './rng.js';
 import {
+  CLASS_BATTLE_LOOT,
   ENEMIES,
   ENEMY_STEAL_LOOT,
   EQUIPMENT,
@@ -139,34 +140,32 @@ export function deriveView(state: RunState): GameView {
       });
     }
     case 'combat': {
-      const encounter = activeEncounter(state.phase);
-      const enemy = ENEMIES[encounter.enemyId];
       if (state.phase.menu === 'loot') {
         if (state.phase.pendingLoot === null) {
           throw new Error('Loot selection requires pending loot.');
         }
         const loot = EQUIPMENT[state.phase.pendingLoot];
         const equipped = state.phase.equipment[loot.slot];
-        if (equipped === null) {
-          throw new Error(
-            'Loot selection requires an occupied equipment slot.',
-          );
-        }
+        const encounter = combatEncounter(state.phase);
         return Object.freeze({
           ...base,
           kind: 'loot-select',
+          heading:
+            encounter.status === 'resolved' ? 'BATTLE LOOT' : 'STOLEN LOOT',
           itemName: loot.name,
           slot: loot.slot.toUpperCase() as 'WEAPON' | 'ARMOR',
           bonus:
             `${loot.bonus > 0 ? '+' : ''}${loot.bonus} ${loot.stat.toUpperCase()}` as
               '+1 POWER' | '+1 DEFENSE',
-          equippedName: EQUIPMENT[equipped].name,
+          equippedName: equipped === null ? 'EMPTY' : EQUIPMENT[equipped].name,
           choices: freezeChoices([
             { id: CHOICE_IDS.equipLoot, number: 1, label: 'EQUIP' },
             { id: CHOICE_IDS.leaveLoot, number: 2, label: 'LEAVE' },
           ]),
         });
       }
+      const encounter = activeEncounter(state.phase);
+      const enemy = ENEMIES[encounter.enemyId];
       if (state.phase.menu === 'spells') {
         const counts = scrollCounts(state.phase.scrollPouch);
         const spellChoices = SCROLL_IDS.flatMap((scroll) =>
@@ -804,7 +803,7 @@ function resolveLootChoice(
   rng: RunState['rng'],
 ): TransitionResult {
   if (phase.pendingLoot === null) {
-    throw new Error('No stolen loot is awaiting a decision.');
+    throw new Error('No loot is awaiting a decision.');
   }
   const resolved = equip
     ? equipItem(phase, phase.pendingLoot)
@@ -813,7 +812,9 @@ function resolveLootChoice(
         menu: 'actions' as const,
         pendingLoot: null,
       });
-  return resolveEnemyTurn(resolved, rng);
+  return combatEncounter(phase).status === 'resolved'
+    ? { phase: returnToExploration(resolved), rng }
+    : resolveEnemyTurn(resolved, rng);
 }
 
 function equipItem(phase: CombatPhase, itemId: EquipmentItemId): CombatPhase {
@@ -960,20 +961,7 @@ function resolveDamageSpell(
         })
       : presentation;
   if (currentHp === 0) {
-    return {
-      phase: Object.freeze({
-        kind: 'exploration',
-        heroClass: phase.heroClass,
-        stats: phase.stats,
-        consumable: phase.consumable,
-        scrollPouch: phase.scrollPouch,
-        equipment: phase.equipment,
-        enemiesSlain: phase.enemiesSlain + 1,
-        dungeon,
-      }),
-      rng,
-      presentations: Object.freeze([finalPresentation]),
-    };
+    return resolveBattleLoot(phase, dungeon, rng, finalPresentation);
   }
   const counter = resolveEnemyTurn(
     Object.freeze({ ...phase, dungeon, menu: 'actions' }),
@@ -1063,20 +1051,7 @@ function resolveHeroAttack(
     status: currentHp === 0 ? 'resolved' : 'active',
   });
   if (currentHp === 0) {
-    return {
-      phase: Object.freeze({
-        kind: 'exploration',
-        heroClass: phase.heroClass,
-        stats: phase.stats,
-        consumable: phase.consumable,
-        scrollPouch: phase.scrollPouch,
-        equipment: phase.equipment,
-        enemiesSlain: phase.enemiesSlain + 1,
-        dungeon,
-      }),
-      rng: result.rng,
-      presentations: Object.freeze([attackPresentation]),
-    };
+    return resolveBattleLoot(phase, dungeon, result.rng, attackPresentation);
   }
   const counter = resolveEnemyTurn(
     Object.freeze({ ...phase, dungeon, smashUsed: phase.smashUsed || smash }),
@@ -1151,6 +1126,45 @@ function resolveEnemyTurn(
   };
 }
 
+function resolveBattleLoot(
+  phase: CombatPhase,
+  dungeon: DungeonRunState,
+  rng: RunState['rng'],
+  presentation: GamePresentation,
+): TransitionResult {
+  const defeated = activeEncounter(phase);
+  const lootId = CLASS_BATTLE_LOOT[phase.heroClass][defeated.enemyId];
+  const loot = EQUIPMENT[lootId];
+  const defeatedPhase: CombatPhase = Object.freeze({
+    ...phase,
+    dungeon,
+    enemiesSlain: phase.enemiesSlain + 1,
+    menu: 'loot',
+    pendingLoot: lootId,
+  });
+  return {
+    phase:
+      phase.equipment[loot.slot] === lootId
+        ? returnToExploration(defeatedPhase)
+        : defeatedPhase,
+    rng,
+    presentations: Object.freeze([presentation]),
+  };
+}
+
+function returnToExploration(phase: CombatPhase): ExplorationPhase {
+  return Object.freeze({
+    kind: 'exploration',
+    heroClass: phase.heroClass,
+    stats: phase.stats,
+    consumable: phase.consumable,
+    scrollPouch: phase.scrollPouch,
+    equipment: phase.equipment,
+    enemiesSlain: phase.enemiesSlain,
+    dungeon: phase.dungeon,
+  });
+}
+
 function deathFromEnemy(
   phase: CombatPhase,
   cause: 'GHOUL' | 'SKELETON KNIGHT',
@@ -1171,11 +1185,19 @@ function deathFromEnemy(
 }
 
 function activeEncounter(phase: CombatPhase) {
+  const encounter = combatEncounter(phase);
+  if (encounter.status !== 'active') {
+    throw new Error('Combat phase requires an active encounter.');
+  }
+  return encounter;
+}
+
+function combatEncounter(phase: CombatPhase) {
   const encounter = phase.dungeon.encounters.find(
     (candidate) => candidate.roomId === phase.encounterRoomId,
   );
-  if (!encounter || encounter.status !== 'active') {
-    throw new Error('Combat phase requires an active encounter.');
+  if (!encounter) {
+    throw new Error('Combat phase requires an encounter.');
   }
   return encounter;
 }

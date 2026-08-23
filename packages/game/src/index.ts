@@ -7,6 +7,7 @@ export {
   replayRun,
 } from './game.js';
 export {
+  CLASS_BATTLE_LOOT,
   ENEMIES,
   ENEMY_STEAL_LOOT,
   EQUIPMENT,
@@ -81,6 +82,7 @@ export type {
   DungeonRunState,
   Equipment,
   EquipmentItemId,
+  EquipmentItemName,
   EncounterRunState,
   ExplorationPhase,
   ExplorationView,

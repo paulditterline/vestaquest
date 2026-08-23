@@ -169,10 +169,12 @@ describe('SessionService creation and presentation state', () => {
       if (!stored) throw new Error('Missing stored session.');
       const gameView = deriveView(stored.state);
       const desiredChoice =
-        gameView.kind === 'combat'
-          ? (gameView.choices.find((choice) => choice.id === CHOICE_IDS.smash)
-              ?.id ?? CHOICE_IDS.attack)
-          : route.shift()!;
+        gameView.kind === 'loot-select'
+          ? CHOICE_IDS.equipLoot
+          : gameView.kind === 'combat'
+            ? (gameView.choices.find((choice) => choice.id === CHOICE_IDS.smash)
+                ?.id ?? CHOICE_IDS.attack)
+            : route.shift()!;
       const choice = gameView.choices.find(
         (candidate) => candidate.id === desiredChoice,
       )?.number;

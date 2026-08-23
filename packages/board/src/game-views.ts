@@ -231,7 +231,7 @@ export function renderLootSelectView(view: LootSelectView): FlagshipLayout {
   if (choices[0]?.label !== 'EQUIP' || choices[1]?.label !== 'LEAVE') {
     throw new TypeError('Loot selection requires Equip and Leave choices.');
   }
-  let layout = writeText(createFlagshipLayout(), 'STOLEN LOOT', {
+  let layout = writeText(createFlagshipLayout(), view.heading, {
     row: 0,
     column: 0,
     width: 22,
@@ -283,11 +283,10 @@ export function renderOpposedRollScaffold(
 
 export function renderOpposedRollResult(
   presentation: OpposedRollPresentation,
-  shell: BoardShell,
 ): FlagshipLayout {
   let layout = renderOpposedRollScaffold(presentation);
-  layout = writeRollResult(layout, 1, presentation.left, shell);
-  layout = writeRollResult(layout, 3, presentation.right, shell);
+  layout = writeRollResult(layout, 1, presentation.left);
+  layout = writeRollResult(layout, 3, presentation.right);
   return writeText(layout, presentation.verdict, {
     row: 5,
     column: 0,
@@ -394,18 +393,15 @@ function writeRollResult(
   layout: FlagshipLayout,
   row: number,
   side: RollSidePresentation,
-  shell: BoardShell,
 ): FlagshipLayout {
   const trackStart = side.diceLabel === '2D6' ? 4 : 3;
   const resultStart = side.diceLabel === '2D6' ? 9 : 8;
-  const accent =
-    shell === 'black' ? CHARACTER_CODE.WHITE : CHARACTER_CODE.BLACK;
   let next = withCells(
     layout,
     Array.from({ length: 4 }, (_, index) => ({
       row,
       column: trackStart + index,
-      code: accent,
+      code: CHARACTER_CODE.PERIOD,
     })),
   );
   const raw = side.dice.join('/');

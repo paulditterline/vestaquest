@@ -240,6 +240,64 @@ describe('SqliteSessionRepository', () => {
     await restarted.close();
   });
 
+  it('resumes a class-specific battle-loot decision after restart', async () => {
+    const path = await databasePath();
+    const repository = new SqliteSessionRepository(path);
+    const service = serviceFor(repository, 'loot', 10);
+    const created = await service.createSession();
+    await service.acknowledgeDisplayed(created.sessionId, 0);
+
+    for (const [key, choice] of [
+      ['class', 1],
+      ['north', 1],
+      ['north-again', 1],
+      ['enter-fight', 2],
+      ['smash', 2],
+    ] as const) {
+      const current = await service.getSession(created.sessionId);
+      await service.acknowledgeDisplayed(
+        created.sessionId,
+        current.view.version,
+      );
+      await service.submitCommand(
+        command(created.sessionId, key, current.view.version, choice),
+      );
+    }
+    await repository.close();
+
+    const restarted = new SqliteSessionRepository(path);
+    const resumedService = serviceFor(restarted, 'resumed-loot', 10);
+    const resumed = await resumedService.getSession(created.sessionId);
+    expect(resumed.view).toMatchObject({ kind: 'loot-select' });
+    const intents = await restarted.listPresentationIntents(created.sessionId);
+    expect(intents.at(-1)?.payload).toMatchObject({
+      kind: 'game-view',
+      view: {
+        kind: 'loot-select',
+        heading: 'BATTLE LOOT',
+        itemName: 'IRON SWORD',
+        equippedName: 'EMPTY',
+      },
+    });
+    await resumedService.acknowledgeDisplayed(
+      created.sessionId,
+      resumed.view.version,
+    );
+    const equipped = await resumedService.submitCommand(
+      command(created.sessionId, 'equip', resumed.view.version, 1),
+    );
+    expect(equipped.kind).toBe('response');
+    if (equipped.kind !== 'response') return;
+    expect(equipped.response.view).toMatchObject({ kind: 'exploration' });
+    const stored = await restarted.get(created.sessionId);
+    expect(stored?.state.phase).toMatchObject({
+      kind: 'exploration',
+      equipment: { weapon: 'iron-sword', armor: null },
+      stats: { power: 7 },
+    });
+    await restarted.close();
+  });
+
   it('returns the original idempotency receipt after restart', async () => {
     const path = await databasePath();
     const firstRepository = new SqliteSessionRepository(path);

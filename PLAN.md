@@ -526,7 +526,7 @@ Acceptance:
 
 Branch: `codex/classes-and-loot`
 
-Status: **Active**. The first playable feature implements the Wizard's three-scroll pouch, spell submenu, Fireball/Lightning/Stun resolution, initial Ghoul and Skeleton Knight affinities, exact board views, persistence, and controller flow. Automated verification and owner Board Lab review passed on 2026-08-12. Rogue Steal/Unaware and its first enemy-specific equipment rewards also passed owner Board Lab review on 2026-08-12.
+Status: **Active**. The first playable feature implements the Wizard's three-scroll pouch, spell submenu, Fireball/Lightning/Stun resolution, initial Ghoul and Skeleton Knight affinities, exact board views, persistence, and controller flow. Automated verification and owner Board Lab review passed on 2026-08-12. Rogue Steal/Unaware and its first enemy-specific equipment rewards also passed owner Board Lab review on 2026-08-12. Ordinary class-specific weapon/armor rewards after victories passed owner physical review on 2026-08-23, including safe post-combat continuation and the empty-slot Iron Sword and Chain Mail Equip flows. The owner also physically approved replacing the opposed-roll solid color tracks with four period characters on 2026-08-23.
 
 Build:
 
@@ -595,6 +595,7 @@ Build:
 - Save/resume and interrupted-board behavior.
 - Session expiry, second-phone behavior, process restart, disconnect, and transport error UX.
 - Quiet Hours protection and transition preference preservation/restoration if used.
+- A deliberate physical-test-window procedure that detects competing scheduled content and, only where supported by reversible owner controls, pauses it and restores it afterward; VestaQuest must not start a write war.
 - Setup, configuration, backup, security, troubleshooting, and hardware test documentation.
 - Optional Local API adapter if not already delivered.
 
@@ -650,16 +651,15 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 - **Procedural generation can produce invalid or bland runs.** Begin with authored topology templates, validate invariants, and randomize bounded content.
 - **Short-run opposed rolls can be swingy.** Keep values data-driven, cap catastrophic margins where appropriate, simulate distributions, then playtest.
 - **Color-only states exclude players and fail in poor light.** Pair color with stable position, labels, or supported characters and test both frame colors.
-- **External messages may interrupt the game.** Detect/report rather than fight for the display; confirm marketplace session arbitration with Vestaboard.
+- **External messages may interrupt the game.** Detect/report rather than fight for the display; a scheduled riddle blocked a queued physical result frame during testing on 2026-08-23. Provide a reversible owner-controlled test-window procedure if supported, and confirm marketplace session arbitration with Vestaboard.
 - **Marketplace assumptions could cause a rewrite.** Keep domain/rendering/transport boundaries strict and defer the marketplace adapter until its contract is verified.
 - **Mechanical testing can become noisy and slow.** Make local simulation authoritative for correctness, use Digital Flagship for integration, and reserve physical writes for experience milestones.
 
 ## 14. Near-term action list
 
-1. Merge the topology-quality pass with enforced junction, loop, and hidden-exit pacing invariants.
-2. Expand compact equipment and non-Steal loot flows.
-3. Build the reusable dungeon-event state machine and first class-biased rooms.
-4. Research official Vestaboard art examples before prototyping the selected-hero, enemy-introduction, and exit-door interstitials for Slice 8.
+1. Merge the owner-approved class-specific battle-loot flow and four-period opposed-roll trail.
+2. Build the reusable dungeon-event state machine and first class-biased rooms.
+3. Research official Vestaboard art examples before prototyping the selected-hero, enemy-introduction, and exit-door interstitials for Slice 8.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed
