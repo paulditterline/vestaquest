@@ -3,6 +3,7 @@ import {
   createEventCheckPresentation,
   createRng,
   HERO_STARTING_STATS,
+  resolveSolidDoorCache,
   rollEventCheck,
   SOLID_DOOR_EVENT,
   validateEventDefinition,
@@ -324,5 +325,113 @@ describe('authored dungeon events', () => {
     expect(wizard).toBeLessThan(0.61);
     expect(rogue).toBeGreaterThan(0.25);
     expect(rogue).toBeLessThan(0.31);
+  });
+
+  it('gives each eligible Solid Door cache category equal odds', () => {
+    const attempts = 30_000;
+    const counts = { dust: 0, 'healing-draught': 0, equipment: 0 };
+    const equipmentCounts = { weapon: 0, armor: 0 };
+    for (let seed = 1; seed <= attempts; seed += 1) {
+      const result = resolveSolidDoorCache({
+        heroClass: 'warrior',
+        consumable: null,
+        equipment: { weapon: null, armor: null },
+        rng: createRng(seed),
+      });
+      counts[result.reward.kind] += 1;
+      if (result.reward.kind === 'equipment') {
+        equipmentCounts[result.reward.slot] += 1;
+      }
+    }
+
+    for (const count of Object.values(counts)) {
+      expect(count / attempts).toBeGreaterThan(0.32);
+      expect(count / attempts).toBeLessThan(0.35);
+    }
+    const equipmentTotal = equipmentCounts.weapon + equipmentCounts.armor;
+    expect(equipmentCounts.weapon / equipmentTotal).toBeGreaterThan(0.48);
+    expect(equipmentCounts.weapon / equipmentTotal).toBeLessThan(0.52);
+  });
+
+  it('removes full slots from the eligible cache table', () => {
+    const rewardsWithDraughtHeld = new Set<string>();
+    const rewardsWithEquipmentFull = new Set<string>();
+    for (let seed = 1; seed <= 200; seed += 1) {
+      rewardsWithDraughtHeld.add(
+        resolveSolidDoorCache({
+          heroClass: 'rogue',
+          consumable: 'healing-draught',
+          equipment: { weapon: null, armor: 'night-cloak' },
+          rng: createRng(seed),
+        }).reward.kind,
+      );
+      rewardsWithEquipmentFull.add(
+        resolveSolidDoorCache({
+          heroClass: 'wizard',
+          consumable: null,
+          equipment: { weapon: 'ash-wand', armor: 'rune-robe' },
+          rng: createRng(seed),
+        }).reward.kind,
+      );
+    }
+
+    expect([...rewardsWithDraughtHeld].sort()).toEqual(['dust', 'equipment']);
+    expect([...rewardsWithEquipmentFull].sort()).toEqual([
+      'dust',
+      'healing-draught',
+    ]);
+  });
+
+  it('selects class gear for the missing equipment slot', () => {
+    const expected = {
+      warrior: 'chain-mail',
+      rogue: 'night-cloak',
+      wizard: 'rune-robe',
+    } as const;
+    for (const heroClass of ['warrior', 'rogue', 'wizard'] as const) {
+      let equipmentReward:
+        ReturnType<typeof resolveSolidDoorCache>['reward'] | undefined;
+      for (let seed = 1; seed <= 100; seed += 1) {
+        const reward = resolveSolidDoorCache({
+          heroClass,
+          consumable: 'healing-draught',
+          equipment: {
+            weapon:
+              heroClass === 'warrior'
+                ? 'iron-sword'
+                : heroClass === 'rogue'
+                  ? 'shadow-knife'
+                  : 'ash-wand',
+            armor: null,
+          },
+          rng: createRng(seed),
+        }).reward;
+        if (reward.kind === 'equipment') {
+          equipmentReward = reward;
+          break;
+        }
+      }
+      expect(equipmentReward).toMatchObject({
+        kind: 'equipment',
+        itemId: expected[heroClass],
+        slot: 'armor',
+      });
+    }
+  });
+
+  it('falls back to board-safe dust without consuming RNG when fully stocked', () => {
+    const rng = createRng(42);
+    const result = resolveSolidDoorCache({
+      heroClass: 'warrior',
+      consumable: 'healing-draught',
+      equipment: { weapon: 'iron-sword', armor: 'chain-mail' },
+      rng,
+    });
+    expect(result).toEqual({
+      reward: { kind: 'dust', message: 'ONLY DUST REMAINS' },
+      rng,
+    });
+    expect(result.reward.message.length).toBeLessThanOrEqual(22);
+    expect(result.rng.draws).toBe(0);
   });
 });

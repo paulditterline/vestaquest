@@ -1,6 +1,13 @@
-import type { EnemyId } from './balance.js';
+import { CLASS_EQUIPMENT, EQUIPMENT, type EnemyId } from './balance.js';
 import { rollDie, type RngState } from './rng.js';
-import type { HeroClass, OpposedRollPresentation, RollStat } from './types.js';
+import type {
+  Equipment,
+  EquipmentItemId,
+  EquipmentItemName,
+  HeroClass,
+  OpposedRollPresentation,
+  RollStat,
+} from './types.js';
 
 export const EVENT_IDS = [
   'library',
@@ -75,6 +82,29 @@ export type EventCheckResult = Readonly<{
   rng: RngState;
 }>;
 
+export type SolidDoorCacheReward =
+  | Readonly<{
+      kind: 'dust';
+      message: 'ONLY DUST REMAINS';
+    }>
+  | Readonly<{
+      kind: 'healing-draught';
+      consumable: 'healing-draught';
+      message: 'HEALING DRAUGHT';
+    }>
+  | Readonly<{
+      kind: 'equipment';
+      itemId: EquipmentItemId;
+      itemName: EquipmentItemName;
+      slot: 'weapon' | 'armor';
+      message: EquipmentItemName;
+    }>;
+
+export type SolidDoorCacheResult = Readonly<{
+  reward: SolidDoorCacheReward;
+  rng: RngState;
+}>;
+
 export function rollEventCheck(
   statValue: number,
   danger: number,
@@ -144,6 +174,68 @@ export function createEventCheckPresentation(input: {
       total: input.result.dangerTotal,
     }),
     verdict: input.verdict,
+  });
+}
+
+/**
+ * Rolls equal odds among the cache outcomes the hero can currently use.
+ * VestaQuest has one general consumable slot, so a Healing Draught is eligible
+ * only when that slot is empty. Class equipment targets an empty slot; if both
+ * are empty, weapon and armor are equally likely. Dust is always eligible and
+ * is the deterministic fallback for a fully stocked hero.
+ */
+export function resolveSolidDoorCache(input: {
+  heroClass: HeroClass;
+  consumable: 'healing-draught' | null;
+  equipment: Equipment;
+  rng: RngState;
+}): SolidDoorCacheResult {
+  const emptyEquipmentSlots = (['weapon', 'armor'] as const).filter(
+    (slot) => input.equipment[slot] === null,
+  );
+  const eligible = [
+    'dust',
+    ...(input.consumable === null ? (['healing-draught'] as const) : []),
+    ...(emptyEquipmentSlots.length > 0 ? (['class-equipment'] as const) : []),
+  ] as const;
+
+  if (eligible.length === 1) {
+    return Object.freeze({ reward: dustReward(), rng: input.rng });
+  }
+
+  const outcomeDraw = rollDie(input.rng, eligible.length);
+  const outcome = eligible[outcomeDraw.value - 1]!;
+  if (outcome === 'dust') {
+    return Object.freeze({ reward: dustReward(), rng: outcomeDraw.state });
+  }
+  if (outcome === 'healing-draught') {
+    return Object.freeze({
+      reward: Object.freeze({
+        kind: 'healing-draught',
+        consumable: 'healing-draught',
+        message: 'HEALING DRAUGHT',
+      }),
+      rng: outcomeDraw.state,
+    });
+  }
+
+  const slotDraw =
+    emptyEquipmentSlots.length === 2
+      ? rollDie(outcomeDraw.state, 2)
+      : undefined;
+  const slot =
+    emptyEquipmentSlots[(slotDraw?.value ?? 1) - 1] ?? emptyEquipmentSlots[0]!;
+  const itemId = CLASS_EQUIPMENT[input.heroClass][slot];
+  const item = EQUIPMENT[itemId];
+  return Object.freeze({
+    reward: Object.freeze({
+      kind: 'equipment',
+      itemId,
+      itemName: item.name,
+      slot,
+      message: item.name,
+    }),
+    rng: slotDraw?.state ?? outcomeDraw.state,
   });
 }
 
@@ -439,6 +531,10 @@ function heroName(heroClass: HeroClass): 'WARRIOR' | 'ROGUE' | 'WIZARD' {
     case 'wizard':
       return 'WIZARD';
   }
+}
+
+function dustReward(): SolidDoorCacheReward {
+  return Object.freeze({ kind: 'dust', message: 'ONLY DUST REMAINS' });
 }
 
 for (const definition of AUTHORED_EVENTS) {

@@ -8,6 +8,7 @@ export {
 } from './game.js';
 export {
   CLASS_BATTLE_LOOT,
+  CLASS_EQUIPMENT,
   ENEMIES,
   ENEMY_STEAL_LOOT,
   EQUIPMENT,
@@ -21,6 +22,7 @@ export type {
   EnemyDefinition,
   EnemyId,
   EquipmentDefinition,
+  EquipmentSlot,
   HeroStats,
   SpellAffinity,
 } from './balance.js';
@@ -51,6 +53,7 @@ export {
   SOLID_DOOR_EVENT,
   createEventCheckPresentation,
   getEventDefinition,
+  resolveSolidDoorCache,
   rollEventCheck,
   validateEventDefinition,
 } from './events.js';
@@ -63,6 +66,8 @@ export type {
   EventDestination,
   EventId,
   EventNodeDefinition,
+  SolidDoorCacheResult,
+  SolidDoorCacheReward,
 } from './events.js';
 export { RNG_VERSION, createRng, nextUint32, rollDie } from './rng.js';
 export {

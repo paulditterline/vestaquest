@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CLASS_BATTLE_LOOT,
+  CLASS_EQUIPMENT,
   ENEMIES,
   EQUIPMENT,
   HERO_STARTING_STATS,
@@ -87,6 +88,11 @@ describe('approved Gate D balance data', () => {
   });
 
   it('defines one class-safe weapon and armor reward per class', () => {
+    expect(CLASS_EQUIPMENT).toEqual({
+      warrior: { weapon: 'iron-sword', armor: 'chain-mail' },
+      rogue: { weapon: 'shadow-knife', armor: 'night-cloak' },
+      wizard: { weapon: 'ash-wand', armor: 'rune-robe' },
+    });
     expect(CLASS_BATTLE_LOOT).toEqual({
       warrior: { ghoul: 'iron-sword', 'skeleton-knight': 'chain-mail' },
       rogue: { ghoul: 'shadow-knife', 'skeleton-knight': 'night-cloak' },
