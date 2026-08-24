@@ -83,6 +83,46 @@ function solidDoorState(
   });
 }
 
+function trapRoomState(
+  rngSeed: number,
+  options: Readonly<{
+    classChoice?: string;
+    hp?: number;
+    consumable?: 'healing-draught' | null;
+  }> = {},
+): RunState {
+  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.rogue);
+  if (state.phase.kind !== 'exploration') {
+    throw new Error('Expected exploration fixture.');
+  }
+  const event = state.phase.dungeon.events.find(
+    ({ eventId }) => eventId === 'trap-room',
+  );
+  if (!event) throw new Error('Expected the staged Trap Room.');
+  return Object.freeze({
+    ...state,
+    rng: createRng(rngSeed),
+    phase: Object.freeze({
+      ...state.phase,
+      kind: 'event' as const,
+      stats: Object.freeze({
+        ...state.phase.stats,
+        hp: options.hp ?? state.phase.stats.hp,
+      }),
+      consumable:
+        options.consumable === undefined
+          ? state.phase.consumable
+          : options.consumable,
+      dungeon: Object.freeze({
+        ...state.phase.dungeon,
+        currentRoomId: event.roomId,
+      }),
+      eventId: event.eventId,
+      screen: Object.freeze({ kind: 'node' as const, nodeId: 'approach' }),
+    }),
+  });
+}
+
 function escapeCrookedHalls(seed = 10): RunState {
   let state = beginExploration(seed);
   for (const choiceId of [
@@ -943,6 +983,164 @@ describe('live Solid Door event flow', () => {
       equipped.state.phase.stats.power + equipped.state.phase.stats.defense,
     ).toBe(beforePower + beforeDefense + 1);
     expect(equipped.state.phase.dungeon.events[0]?.status).toBe('resolved');
+  });
+});
+
+describe('live Room of Blades event flow', () => {
+  it('shows Cross or Leave and preserves the attempt when leaving', () => {
+    const state = trapRoomState(1);
+    expect(deriveView(state)).toMatchObject({
+      kind: 'event',
+      heading: 'ROOM OF BLADES',
+      copy: ['A CACHE WAITS BEYOND'],
+      choices: [
+        { id: 'event.trap-room.cross', number: 1, label: 'CROSS' },
+        { id: 'event.trap-room.leave', number: 2, label: 'LEAVE' },
+      ],
+    });
+    const left = choose(state, 'leave-traps', 'event.trap-room.leave');
+    expect(left.status).toBe('accepted');
+    if (left.status !== 'accepted' || left.state.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration after leaving.');
+    }
+    expect(
+      left.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'trap-room',
+      )?.status,
+    ).toBe('active');
+  });
+
+  it('applies ordinary and severe wounds before returning to the map', () => {
+    const findWound = (
+      verdict: 'THE BLADES CUT' | 'BLADES CUT DEEP',
+      classChoice: string,
+    ) => {
+      for (let seed = 1; seed <= 1_000; seed += 1) {
+        const result = choose(
+          trapRoomState(seed, { classChoice }),
+          `cross-${verdict}-${seed}`,
+          'event.trap-room.cross',
+        );
+        if (
+          result.status === 'accepted' &&
+          result.presentations[0]?.kind === 'opposed-roll' &&
+          result.presentations[0].verdict === verdict
+        ) {
+          return result;
+        }
+      }
+      throw new Error(`Could not find deterministic ${verdict} result.`);
+    };
+
+    const ordinary = findWound('THE BLADES CUT', CHOICE_IDS.rogue);
+    expect(ordinary.state.phase).toMatchObject({
+      kind: 'event',
+      stats: { hp: 3 },
+      screen: {
+        kind: 'reward',
+        heading: 'ROOM OF BLADES',
+        copy: ['THE BLADES CUT', 'LOSE 1 HP'],
+      },
+    });
+
+    const severe = findWound('BLADES CUT DEEP', CHOICE_IDS.warrior);
+    expect(severe.state.phase).toMatchObject({
+      kind: 'event',
+      stats: { hp: 3 },
+      screen: {
+        kind: 'reward',
+        heading: 'ROOM OF BLADES',
+        copy: ['BLADES CUT DEEP', 'LOSE 2 HP'],
+      },
+    });
+    const continued = choose(
+      severe.state,
+      'continue-after-traps',
+      'event.trap-room.continue',
+    );
+    expect(continued.status).toBe('accepted');
+    if (
+      continued.status !== 'accepted' ||
+      continued.state.phase.kind !== 'exploration'
+    ) {
+      throw new Error('Expected exploration after trap injury.');
+    }
+    expect(
+      continued.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'trap-room',
+      )?.status,
+    ).toBe('resolved');
+  });
+
+  it('turns the visible raw 1 versus 6 catastrophe into a trap epitaph', () => {
+    let catastrophe:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        trapRoomState(seed),
+        `catastrophe-${seed}`,
+        'event.trap-room.cross',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].left.dice[0] === 1 &&
+        result.presentations[0].right.dice[0] === 6
+      ) {
+        catastrophe = result;
+        break;
+      }
+    }
+    expect(catastrophe).toBeDefined();
+    if (!catastrophe) throw new Error('Expected the trap catastrophe.');
+    expect(catastrophe.presentations[0]).toMatchObject({
+      purpose: 'event',
+      prompt: 'CROSS THE BLADES',
+      left: { name: 'ROGUE', diceLabel: 'D6', modifierStat: 'S', dice: [1] },
+      right: { name: 'DANGER', diceLabel: 'D6', modifierStat: 'X', dice: [6] },
+      verdict: 'THE BLADES TAKE YOU',
+    });
+    expect(catastrophe.state.phase).toMatchObject({
+      kind: 'death',
+      heroClass: 'rogue',
+      cause: 'TRAPS',
+    });
+    expect(deriveView(catastrophe.state)).toMatchObject({
+      kind: 'death',
+      heading: 'YOU DIED',
+      cause: 'TRAPS',
+      choices: [],
+    });
+  });
+
+  it('opens the shared eligible cache after a successful crossing', () => {
+    let success:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        trapRoomState(seed, { consumable: null }),
+        `safe-crossing-${seed}`,
+        'event.trap-room.cross',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'YOU CROSS SAFELY'
+      ) {
+        success = result;
+        break;
+      }
+    }
+    expect(success).toBeDefined();
+    if (!success || success.state.phase.kind !== 'event') {
+      throw new Error('Expected a successful trap event.');
+    }
+    expect(['reward', 'equipment']).toContain(success.state.phase.screen.kind);
+    expect(
+      success.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'trap-room',
+      )?.status,
+    ).toBe('resolved');
   });
 });
 

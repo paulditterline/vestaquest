@@ -180,7 +180,7 @@ describe('SqliteSessionRepository', () => {
       sessionId,
       state: createRun(1),
       displayStatus: 'locked',
-      nextPresentationSequence: 2,
+      nextPresentationSequence: 3,
       createdAtMs: 1,
       updatedAtMs: 1,
     };
@@ -203,6 +203,29 @@ describe('SqliteSessionRepository', () => {
         status: 'pending',
         payload: { kind: 'roll-result', presentation: roll },
       },
+      {
+        id: 'trap-death-intent',
+        sessionId,
+        viewVersion: 0,
+        sequence: 2,
+        isStable: true,
+        status: 'pending',
+        payload: {
+          kind: 'game-view',
+          view: {
+            id: 'trap-death',
+            revision: 0,
+            kind: 'death',
+            heroClass: 'rogue',
+            heading: 'YOU DIED',
+            cause: 'TRAPS',
+            roomsFound: 4,
+            enemiesSlain: 1,
+            roomsUntilExit: 5,
+            choices: [],
+          },
+        },
+      },
     ];
     await repository.create(session, intents);
     await repository.close();
@@ -218,6 +241,12 @@ describe('SqliteSessionRepository', () => {
             left: { modifierStat: 'P' },
             right: { name: 'DANGER', modifierStat: 'X' },
           },
+        },
+      },
+      {
+        payload: {
+          kind: 'game-view',
+          view: { kind: 'death', cause: 'TRAPS' },
         },
       },
     ]);

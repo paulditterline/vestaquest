@@ -984,7 +984,11 @@ function parseGameView(value: unknown): GameView {
         kind,
         heroClass: parseHeroClass(view.heroClass),
         heading: 'YOU DIED',
-        cause: requireEnum(view.cause, ['GHOUL', 'SKELETON KNIGHT'] as const),
+        cause: requireEnum(view.cause, [
+          'GHOUL',
+          'SKELETON KNIGHT',
+          'TRAPS',
+        ] as const),
         roomsFound: requirePositiveInteger(view.roomsFound, 'rooms found'),
         enemiesSlain: requireNonnegativeInteger(
           view.enemiesSlain,

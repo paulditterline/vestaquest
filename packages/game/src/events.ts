@@ -6,6 +6,7 @@ import type {
   Equipment,
   EquipmentItemId,
   EquipmentItemName,
+  DeathCause,
   HeroClass,
   OpposedRollPresentation,
   RollStat,
@@ -35,7 +36,8 @@ export type EventDestination =
   | Readonly<{ kind: 'return-to-map' }>
   | Readonly<{ kind: 'combat'; enemyId: EnemyId }>
   | Readonly<{ kind: 'reward'; rewardId: string }>
-  | Readonly<{ kind: 'injury'; damage: number }>
+  | Readonly<{ kind: 'injury'; damage: number; message: string }>
+  | Readonly<{ kind: 'death'; cause: DeathCause }>
   | Readonly<{
       kind: 'clue';
       clueId: string;
@@ -58,6 +60,17 @@ export type EventChoiceResolution =
       failureVerdict: string;
       success: EventDestination;
       failure: EventDestination;
+      severeFailure?: Readonly<{
+        minimumMargin: number;
+        verdict: string;
+        destination: EventDestination;
+      }>;
+      catastrophe?: Readonly<{
+        playerDie: number;
+        dangerDie: number;
+        verdict: string;
+        destination: EventDestination;
+      }>;
     }>;
 
 export type EventChoiceDefinition = Readonly<{
@@ -88,6 +101,11 @@ export type EventCheckResult = Readonly<{
   dangerTotal: number;
   succeeded: boolean;
   rng: RngState;
+}>;
+
+export type EventCheckOutcome = Readonly<{
+  verdict: string;
+  destination: EventDestination;
 }>;
 
 export type SolidDoorCacheReward =
@@ -182,6 +200,41 @@ export function createEventCheckPresentation(input: {
       total: input.result.dangerTotal,
     }),
     verdict: input.verdict,
+  });
+}
+
+export function resolveEventCheckOutcome(
+  resolution: Extract<EventChoiceResolution, { kind: 'opposed-check' }>,
+  result: EventCheckResult,
+): EventCheckOutcome {
+  if (result.succeeded) {
+    return Object.freeze({
+      verdict: resolution.successVerdict,
+      destination: resolution.success,
+    });
+  }
+  if (
+    resolution.catastrophe?.playerDie === result.playerDie &&
+    resolution.catastrophe.dangerDie === result.dangerDie
+  ) {
+    return Object.freeze({
+      verdict: resolution.catastrophe.verdict,
+      destination: resolution.catastrophe.destination,
+    });
+  }
+  if (
+    resolution.severeFailure &&
+    result.dangerTotal - result.playerTotal >=
+      resolution.severeFailure.minimumMargin
+  ) {
+    return Object.freeze({
+      verdict: resolution.severeFailure.verdict,
+      destination: resolution.severeFailure.destination,
+    });
+  }
+  return Object.freeze({
+    verdict: resolution.failureVerdict,
+    destination: resolution.failure,
   });
 }
 
@@ -303,8 +356,70 @@ export const SOLID_DOOR_EVENT: EventDefinition = Object.freeze({
   ]),
 });
 
+export const TRAP_ROOM_EVENT: EventDefinition = Object.freeze({
+  id: 'trap-room',
+  heading: 'ROOM OF BLADES',
+  startNodeId: 'approach',
+  nodes: Object.freeze([
+    Object.freeze({
+      id: 'approach',
+      copy: Object.freeze(['A CACHE WAITS BEYOND']),
+      choices: Object.freeze([
+        Object.freeze({
+          id: 'cross',
+          label: 'CROSS',
+          resolvesEvent: true,
+          resolution: Object.freeze({
+            kind: 'opposed-check',
+            stat: 'skill',
+            danger: 3,
+            ties: 'failure',
+            keepHighFor: Object.freeze([]),
+            prompt: 'CROSS THE BLADES',
+            successVerdict: 'YOU CROSS SAFELY',
+            failureVerdict: 'THE BLADES CUT',
+            success: Object.freeze({
+              kind: 'reward',
+              rewardId: 'trap-room-cache',
+            }),
+            failure: Object.freeze({
+              kind: 'injury',
+              damage: 1,
+              message: 'THE BLADES CUT',
+            }),
+            severeFailure: Object.freeze({
+              minimumMargin: 3,
+              verdict: 'BLADES CUT DEEP',
+              destination: Object.freeze({
+                kind: 'injury',
+                damage: 2,
+                message: 'BLADES CUT DEEP',
+              }),
+            }),
+            catastrophe: Object.freeze({
+              playerDie: 1,
+              dangerDie: 6,
+              verdict: 'THE BLADES TAKE YOU',
+              destination: Object.freeze({ kind: 'death', cause: 'TRAPS' }),
+            }),
+          }),
+        }),
+        Object.freeze({
+          id: 'leave',
+          label: 'LEAVE',
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({ kind: 'return-to-map' }),
+          }),
+        }),
+      ]),
+    }),
+  ]),
+});
+
 export const AUTHORED_EVENTS: readonly EventDefinition[] = Object.freeze([
   SOLID_DOOR_EVENT,
+  TRAP_ROOM_EVENT,
 ]);
 
 export function getEventDefinition(eventId: EventId): EventDefinition {
@@ -323,6 +438,28 @@ export function placePlaytestSolidDoor(
   exitRoomId: RoomId,
   occupiedRoomIds: readonly RoomId[],
 ): PlacedEvent {
+  return placePlaytestEvent(
+    topology,
+    exitRoomId,
+    occupiedRoomIds,
+    'solid-door',
+  );
+}
+
+export function placePlaytestTrapRoom(
+  topology: DungeonTopology,
+  exitRoomId: RoomId,
+  occupiedRoomIds: readonly RoomId[],
+): PlacedEvent {
+  return placePlaytestEvent(topology, exitRoomId, occupiedRoomIds, 'trap-room');
+}
+
+function placePlaytestEvent(
+  topology: DungeonTopology,
+  exitRoomId: RoomId,
+  occupiedRoomIds: readonly RoomId[],
+  eventId: 'solid-door' | 'trap-room',
+): PlacedEvent {
   const unavailable = new Set<RoomId>([
     topology.entranceRoomId,
     exitRoomId,
@@ -337,9 +474,9 @@ export function placePlaytestSolidDoor(
   const fallback = topology.rooms.find(({ id }) => !unavailable.has(id));
   const room = offRoute ?? fallback;
   if (!room) {
-    throw new RangeError('Solid Door playtest placement has no empty room.');
+    throw new RangeError(`${eventId} playtest placement has no empty room.`);
   }
-  return Object.freeze({ roomId: room.id, eventId: 'solid-door' });
+  return Object.freeze({ roomId: room.id, eventId });
 }
 
 /**
@@ -454,6 +591,42 @@ function validateResolution(
   );
   validateDestination(resolution.success, choiceId);
   validateDestination(resolution.failure, choiceId);
+  if (resolution.severeFailure) {
+    if (
+      !Number.isInteger(resolution.severeFailure.minimumMargin) ||
+      resolution.severeFailure.minimumMargin < 1
+    ) {
+      throw new RangeError(
+        `Event choice ${choiceId} severe margin must be a positive integer.`,
+      );
+    }
+    requireBoardLine(
+      resolution.severeFailure.verdict,
+      `Event choice ${choiceId} severe verdict`,
+      22,
+    );
+    validateDestination(resolution.severeFailure.destination, choiceId);
+  }
+  if (resolution.catastrophe) {
+    if (
+      !Number.isInteger(resolution.catastrophe.playerDie) ||
+      resolution.catastrophe.playerDie < 1 ||
+      resolution.catastrophe.playerDie > 6 ||
+      !Number.isInteger(resolution.catastrophe.dangerDie) ||
+      resolution.catastrophe.dangerDie < 1 ||
+      resolution.catastrophe.dangerDie > 6
+    ) {
+      throw new RangeError(
+        `Event choice ${choiceId} catastrophe dice must be D6 results.`,
+      );
+    }
+    requireBoardLine(
+      resolution.catastrophe.verdict,
+      `Event choice ${choiceId} catastrophe verdict`,
+      22,
+    );
+    validateDestination(resolution.catastrophe.destination, choiceId);
+  }
 }
 
 function validateDestination(
@@ -476,6 +649,13 @@ function validateDestination(
           `Event choice ${choiceId} injury must deal positive integer damage.`,
         );
       }
+      requireBoardLine(
+        destination.message,
+        `Event choice ${choiceId} injury message`,
+        22,
+      );
+      return;
+    case 'death':
       return;
     case 'clue':
       requireIdentifier(destination.clueId, `Event choice ${choiceId} clue`);
@@ -490,7 +670,16 @@ function destinationsFor(node: EventNodeDefinition): EventDestination[] {
   return node.choices.flatMap((choice) =>
     choice.resolution.kind === 'immediate'
       ? [choice.resolution.destination]
-      : [choice.resolution.success, choice.resolution.failure],
+      : [
+          choice.resolution.success,
+          choice.resolution.failure,
+          ...(choice.resolution.severeFailure
+            ? [choice.resolution.severeFailure.destination]
+            : []),
+          ...(choice.resolution.catastrophe
+            ? [choice.resolution.catastrophe.destination]
+            : []),
+        ],
   );
 }
 

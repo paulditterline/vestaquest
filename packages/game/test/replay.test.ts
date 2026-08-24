@@ -42,12 +42,16 @@ function jsonCopy<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function eventRunWithoutInterveningCombat(): RunState {
+function eventRunWithoutInterveningCombat(
+  eventId: 'solid-door' | 'trap-room' = 'solid-door',
+): RunState {
   for (let seed = 1; seed <= 1_000; seed += 1) {
     let state = advance(createRun(seed), `class-${seed}`, CHOICE_IDS.warrior);
     if (state.phase.kind !== 'exploration') continue;
     const topology = getTopology(state.phase.dungeon.topologyId);
-    const event = state.phase.dungeon.events[0];
+    const event = state.phase.dungeon.events.find(
+      (candidate) => candidate.eventId === eventId,
+    );
     if (!event) continue;
     const path = shortestRoomPath(
       topology,
@@ -76,6 +80,13 @@ function eventRunWithoutInterveningCombat(): RunState {
         W: CHOICE_IDS.west,
       }[direction];
       state = advance(state, `event-move-${seed}-${index}`, choiceId);
+      if (state.phase.kind === 'event' && state.phase.eventId !== eventId) {
+        state = advance(
+          state,
+          `leave-other-event-${seed}-${index}`,
+          `event.${state.phase.eventId}.leave`,
+        );
+      }
     }
     if (state.phase.kind !== 'event') {
       throw new Error('Expected to enter the staged event.');
@@ -123,6 +134,24 @@ describe('accepted-command replay', () => {
       throw new Error('Expected replayed exploration.');
     }
     expect(replayed.phase.dungeon.events[0]?.status).toBe('resolved');
+  });
+
+  it('replays the staged Trap Room roll and its terminal outcome exactly', () => {
+    let original = eventRunWithoutInterveningCombat('trap-room');
+    original = advance(original, 'event-cross', 'event.trap-room.cross');
+    if (original.phase.kind === 'event') {
+      const finalChoice =
+        original.phase.screen.kind === 'equipment'
+          ? 'event.trap-room.leave'
+          : 'event.trap-room.continue';
+      original = advance(original, 'trap-finish', finalChoice);
+    }
+    expect(['exploration', 'death']).toContain(original.phase.kind);
+
+    const persisted = jsonCopy(original.acceptedCommands);
+    const replayed = replayRun(original.seed, persisted);
+    expect(replayed).toEqual(original);
+    expect(deriveView(replayed)).toEqual(deriveView(original));
   });
 
   it('replays partial logs to their stable intermediate map', () => {
