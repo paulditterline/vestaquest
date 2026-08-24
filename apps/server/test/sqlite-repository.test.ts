@@ -6,12 +6,21 @@ import {
   CommandSessionRequestSchema,
   type SessionId,
 } from '@vestaquest/contracts';
+import {
+  createEventCheckPresentation,
+  createRng,
+  createRun,
+  rollEventCheck,
+  type GameView,
+} from '@vestaquest/game';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   PersistenceCorruptionError,
   SessionService,
   SqliteSessionRepository,
+  type PresentationIntent,
   type SessionIdFactory,
+  type StoredSession,
 } from '../src/index.js';
 
 const temporaryDirectories: string[] = [];
@@ -138,6 +147,80 @@ describe('SqliteSessionRepository', () => {
       kind: 'roll-result',
       presentation: { purpose: 'initiative', verdict: 'FIRST: GHOUL' },
     });
+    await restarted.close();
+  });
+
+  it('persists generic event choices and opposed checks across restart', async () => {
+    const path = await databasePath();
+    const repository = new SqliteSessionRepository(path);
+    const sessionId = 'event-session' as SessionId;
+    const eventView: GameView = {
+      id: 'event-view',
+      revision: 0,
+      kind: 'event',
+      heading: 'SOLID DOOR',
+      copy: ['A SOLID DOOR WAITS'],
+      choices: [
+        { id: 'event.solid-door.bash', number: 1, label: 'BASH THE DOOR' },
+        { id: 'event.solid-door.listen', number: 2, label: 'LISTEN' },
+        { id: 'event.solid-door.leave', number: 3, label: 'LEAVE' },
+      ],
+    };
+    const check = rollEventCheck(5, 4, 'failure', createRng(1));
+    const roll = createEventCheckPresentation({
+      heroClass: 'warrior',
+      stat: 'power',
+      statValue: 5,
+      danger: 4,
+      result: check,
+      prompt: 'BASH THE DOOR',
+      verdict: 'THE DOOR BREAKS',
+    });
+    const session: StoredSession = {
+      sessionId,
+      state: createRun(1),
+      displayStatus: 'locked',
+      nextPresentationSequence: 2,
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    };
+    const intents: readonly PresentationIntent[] = [
+      {
+        id: 'event-view-intent',
+        sessionId,
+        viewVersion: 0,
+        sequence: 0,
+        isStable: true,
+        status: 'delivered',
+        payload: { kind: 'game-view', view: eventView },
+      },
+      {
+        id: 'event-roll-intent',
+        sessionId,
+        viewVersion: 0,
+        sequence: 1,
+        isStable: false,
+        status: 'pending',
+        payload: { kind: 'roll-result', presentation: roll },
+      },
+    ];
+    await repository.create(session, intents);
+    await repository.close();
+
+    const restarted = new SqliteSessionRepository(path);
+    expect(await restarted.listPresentationIntents(sessionId)).toMatchObject([
+      { payload: { kind: 'game-view', view: { kind: 'event' } } },
+      {
+        payload: {
+          kind: 'roll-result',
+          presentation: {
+            purpose: 'event',
+            left: { modifierStat: 'P' },
+            right: { name: 'DANGER', modifierStat: 'X' },
+          },
+        },
+      },
+    ]);
     await restarted.close();
   });
 

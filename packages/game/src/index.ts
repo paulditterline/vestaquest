@@ -45,8 +45,14 @@ export type {
 } from './combat.js';
 export { placeCoreEncounters, shortestRoomPath } from './encounters.js';
 export type { EncounterPlacement, PlacedEncounter } from './encounters.js';
-export { EVENT_IDS, validateEventDefinition } from './events.js';
+export {
+  EVENT_IDS,
+  createEventCheckPresentation,
+  rollEventCheck,
+  validateEventDefinition,
+} from './events.js';
 export type {
+  EventCheckResult,
   EventCheckStat,
   EventChoiceDefinition,
   EventChoiceResolution,
@@ -94,6 +100,7 @@ export type {
   EquipmentItemId,
   EquipmentItemName,
   EncounterRunState,
+  EventView,
   ExplorationPhase,
   ExplorationView,
   GameChoice,

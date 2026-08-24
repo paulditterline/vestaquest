@@ -125,6 +125,20 @@ describe('display state', () => {
       }).view.display.status,
     ).toBe('complete');
   });
+
+  it('accepts the presentation-free event interaction kind', () => {
+    expect(
+      CreateSessionResponseSchema.parse({
+        protocolVersion: PROTOCOL_VERSION,
+        sessionId,
+        view: {
+          version: 4,
+          kind: 'event',
+          display: { status: 'ready', legalChoices: [1, 2, 3] },
+        },
+      }).view.kind,
+    ).toBe('event');
+  });
 });
 
 describe('development board projection', () => {

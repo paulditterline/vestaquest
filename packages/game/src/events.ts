@@ -1,4 +1,6 @@
 import type { EnemyId } from './balance.js';
+import { rollDie, type RngState } from './rng.js';
+import type { HeroClass, OpposedRollPresentation, RollStat } from './types.js';
 
 export const EVENT_IDS = [
   'library',
@@ -35,6 +37,7 @@ export type EventChoiceResolution =
       kind: 'opposed-check';
       stat: EventCheckStat;
       danger: number;
+      ties: 'success' | 'failure';
       success: EventDestination;
       failure: EventDestination;
     }>;
@@ -53,9 +56,80 @@ export type EventNodeDefinition = Readonly<{
 
 export type EventDefinition = Readonly<{
   id: EventId;
+  heading: string;
   startNodeId: string;
   nodes: readonly EventNodeDefinition[];
 }>;
+
+export type EventCheckResult = Readonly<{
+  playerDie: number;
+  dangerDie: number;
+  playerTotal: number;
+  dangerTotal: number;
+  succeeded: boolean;
+  rng: RngState;
+}>;
+
+export function rollEventCheck(
+  statValue: number,
+  danger: number,
+  ties: 'success' | 'failure',
+  rng: RngState,
+): EventCheckResult {
+  if (!Number.isInteger(statValue) || statValue < 0) {
+    throw new RangeError('Event stat value must be a nonnegative integer.');
+  }
+  if (!Number.isInteger(danger) || danger < 0) {
+    throw new RangeError('Event danger must be a nonnegative integer.');
+  }
+  const player = rollDie(rng, 6);
+  const obstacle = rollDie(player.state, 6);
+  const playerTotal = player.value + statValue;
+  const dangerTotal = obstacle.value + danger;
+  return Object.freeze({
+    playerDie: player.value,
+    dangerDie: obstacle.value,
+    playerTotal,
+    dangerTotal,
+    succeeded:
+      playerTotal > dangerTotal ||
+      (ties === 'success' && playerTotal === dangerTotal),
+    rng: obstacle.state,
+  });
+}
+
+export function createEventCheckPresentation(input: {
+  heroClass: HeroClass;
+  stat: EventCheckStat;
+  statValue: number;
+  danger: number;
+  result: EventCheckResult;
+  prompt: string;
+  verdict: string;
+}): OpposedRollPresentation {
+  return Object.freeze({
+    kind: 'opposed-roll',
+    purpose: 'event',
+    prompt: input.prompt,
+    left: Object.freeze({
+      name: heroName(input.heroClass),
+      diceLabel: 'D6',
+      dice: Object.freeze([input.result.playerDie]),
+      modifierStat: eventRollStat(input.stat),
+      modifier: input.statValue,
+      total: input.result.playerTotal,
+    }),
+    right: Object.freeze({
+      name: 'DANGER',
+      diceLabel: 'D6',
+      dice: Object.freeze([input.result.dangerDie]),
+      modifierStat: 'X',
+      modifier: input.danger,
+      total: input.result.dangerTotal,
+    }),
+    verdict: input.verdict,
+  });
+}
 
 /**
  * Validates the authored structure without deciding event balance or content.
@@ -69,6 +143,7 @@ export function validateEventDefinition(definition: EventDefinition): void {
   if (definition.nodes.length === 0) {
     throw new RangeError(`Event ${definition.id} requires at least one node.`);
   }
+  requireBoardLine(definition.heading, `Event ${definition.id} heading`, 22);
 
   const nodes = new Map<string, EventNodeDefinition>();
   for (const node of definition.nodes) {
@@ -86,6 +161,14 @@ export function validateEventDefinition(definition: EventDefinition): void {
         `Event node ${node.id} requires one through four choices.`,
       );
     }
+    if (node.copy.length + node.choices.length > 5) {
+      throw new RangeError(
+        `Event node ${node.id} copy and choices do not fit the board.`,
+      );
+    }
+    node.copy.forEach((line, index) =>
+      requireBoardLine(line, `Event node ${node.id} copy ${index + 1}`, 22),
+    );
     const choiceIds = new Set<string>();
     for (const choice of node.choices) {
       requireIdentifier(choice.id, `Event node ${node.id} choice id`);
@@ -95,7 +178,7 @@ export function validateEventDefinition(definition: EventDefinition): void {
         );
       }
       choiceIds.add(choice.id);
-      requireText(choice.label, `Event choice ${choice.id} label`);
+      requireBoardLine(choice.label, `Event choice ${choice.id} label`, 20);
       validateResolution(choice.resolution, choice.id);
     }
     nodes.set(node.id, node);
@@ -231,8 +314,32 @@ function requireIdentifier(value: string, label: string): void {
   }
 }
 
-function requireText(value: string, label: string): void {
-  if (value.trim().length === 0) {
-    throw new RangeError(`${label} must not be blank.`);
+function requireBoardLine(value: string, label: string, maximum: number): void {
+  if (value.trim().length === 0 || value.length > maximum) {
+    throw new RangeError(`${label} must contain 1 through ${maximum} cells.`);
+  }
+}
+
+function eventRollStat(stat: EventCheckStat): RollStat {
+  switch (stat) {
+    case 'power':
+      return 'P';
+    case 'defense':
+      return 'D';
+    case 'skill':
+      return 'S';
+    case 'luck':
+      return 'L';
+  }
+}
+
+function heroName(heroClass: HeroClass): 'WARRIOR' | 'ROGUE' | 'WIZARD' {
+  switch (heroClass) {
+    case 'warrior':
+      return 'WARRIOR';
+    case 'rogue':
+      return 'ROGUE';
+    case 'wizard':
+      return 'WIZARD';
   }
 }

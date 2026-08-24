@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { validateEventDefinition, type EventDefinition } from '../src/index.js';
+import {
+  createEventCheckPresentation,
+  createRng,
+  rollEventCheck,
+  validateEventDefinition,
+  type EventDefinition,
+} from '../src/index.js';
 
 const VALID_EVENT: EventDefinition = {
   id: 'solid-door',
+  heading: 'SOLID DOOR',
   startNodeId: 'approach',
   nodes: [
     {
@@ -16,6 +23,7 @@ const VALID_EVENT: EventDefinition = {
             kind: 'opposed-check',
             stat: 'power',
             danger: 4,
+            ties: 'failure',
             success: { kind: 'reward', rewardId: 'door-cache' },
             failure: { kind: 'node', nodeId: 'door-holds' },
           },
@@ -109,6 +117,7 @@ describe('authored dungeon events', () => {
   it('rejects choice cycles that could trap a run', () => {
     const cyclic: EventDefinition = {
       id: 'library',
+      heading: 'LIBRARY',
       startNodeId: 'books',
       nodes: [
         {
@@ -147,6 +156,7 @@ describe('authored dungeon events', () => {
                 kind: 'opposed-check',
                 stat: 'power',
                 danger: -1,
+                ties: 'failure',
                 success: { kind: 'reward', rewardId: 'door-cache' },
                 failure: { kind: 'node', nodeId: 'door-holds' },
               },
@@ -173,5 +183,70 @@ describe('authored dungeon events', () => {
         ],
       }),
     ).toThrow('one through four choices');
+  });
+
+  it('rejects authored nodes that cannot fit a 6x22 event view', () => {
+    expect(() =>
+      validateEventDefinition({
+        ...VALID_EVENT,
+        nodes: [
+          {
+            ...VALID_EVENT.nodes[0]!,
+            copy: ['A SOLID DOOR WAITS', 'IRON BANDS CROSS IT', 'NO KEYHOLE'],
+          },
+          ...VALID_EVENT.nodes.slice(1),
+        ],
+      }),
+    ).toThrow('do not fit the board');
+  });
+
+  it('resolves exactly two deterministic dice and makes tie policy authored', () => {
+    const tieFails = rollEventCheck(4, 4, 'failure', createRng(2));
+    const tieSucceeds = rollEventCheck(4, 4, 'success', createRng(2));
+    expect(tieFails).toMatchObject({
+      playerDie: 1,
+      dangerDie: 1,
+      playerTotal: 5,
+      dangerTotal: 5,
+      succeeded: false,
+      rng: { draws: 2 },
+    });
+    expect(tieSucceeds).toMatchObject({ succeeded: true, rng: { draws: 2 } });
+  });
+
+  it('builds the shared two-track reveal with Luck and generic danger', () => {
+    const result = rollEventCheck(5, 4, 'failure', createRng(1));
+    expect(
+      createEventCheckPresentation({
+        heroClass: 'rogue',
+        stat: 'luck',
+        statValue: 5,
+        danger: 4,
+        result,
+        prompt: 'SEARCH THE DARK',
+        verdict: 'YOU FIND A CLUE',
+      }),
+    ).toEqual({
+      kind: 'opposed-roll',
+      purpose: 'event',
+      prompt: 'SEARCH THE DARK',
+      left: {
+        name: 'ROGUE',
+        diceLabel: 'D6',
+        dice: [4],
+        modifierStat: 'L',
+        modifier: 5,
+        total: 9,
+      },
+      right: {
+        name: 'DANGER',
+        diceLabel: 'D6',
+        dice: [2],
+        modifierStat: 'X',
+        modifier: 4,
+        total: 6,
+      },
+      verdict: 'YOU FIND A CLUE',
+    });
   });
 });

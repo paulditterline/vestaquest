@@ -3,6 +3,7 @@ import type {
   CombatNoticePresentation,
   CombatView,
   DeathView,
+  EventView,
   ExplorationView,
   GameChoice,
   GameView,
@@ -101,6 +102,37 @@ export function renderExplorationView(
     canUseItem: view.canUseItem,
     grid: view.grid,
   });
+}
+
+export function renderEventView(view: EventView): FlagshipLayout {
+  const choices = requireNumberedChoices(view.choices, view.choices.length);
+  if (
+    view.heading.length < 1 ||
+    view.heading.length > 22 ||
+    view.copy.length < 1 ||
+    choices.length < 1 ||
+    choices.length > 4 ||
+    view.copy.length + choices.length > 5
+  ) {
+    throw new RangeError('Event view does not fit the Flagship board.');
+  }
+  let layout = writeText(createFlagshipLayout(), view.heading, {
+    row: 0,
+    column: 0,
+    width: 22,
+    align: 'center',
+  });
+  for (const [index, line] of view.copy.entries()) {
+    layout = writeText(layout, line, { row: index + 1, column: 0 });
+  }
+  const choiceStart = 6 - choices.length;
+  for (const [index, choice] of choices.entries()) {
+    layout = writeText(layout, `${choice.number} ${choice.label}`, {
+      row: choiceStart + index,
+      column: 0,
+    });
+  }
+  return layout;
 }
 
 export function renderVictoryView(view: VictoryView): FlagshipLayout {
@@ -335,6 +367,8 @@ export function renderGameView(
       return renderClassSelectView(view);
     case 'exploration':
       return renderExplorationView(view, shell);
+    case 'event':
+      return renderEventView(view);
     case 'combat':
       return renderCombatView(view, shell);
     case 'spell-select':
@@ -382,11 +416,19 @@ function writeRollName(
       ? 'POWER'
       : side.modifierStat === 'D'
         ? 'DEFENSE'
-        : 'SKILL';
-  return writeText(layout, `${name} ${stat} ${side.modifier}`, {
-    row,
-    column: 0,
-  });
+        : side.modifierStat === 'S'
+          ? 'SKILL'
+          : side.modifierStat === 'L'
+            ? 'LUCK'
+            : '';
+  return writeText(
+    layout,
+    `${name}${stat ? ` ${stat}` : ''} ${side.modifier}`,
+    {
+      row,
+      column: 0,
+    },
+  );
 }
 
 function writeRollResult(

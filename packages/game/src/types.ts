@@ -32,7 +32,8 @@ export const CHOICE_IDS = {
   run: 'combat.run',
 } as const;
 
-export type ChoiceId = (typeof CHOICE_IDS)[keyof typeof CHOICE_IDS];
+export type ChoiceId =
+  (typeof CHOICE_IDS)[keyof typeof CHOICE_IDS] | `event.${string}`;
 
 export interface ChooseCommand {
   readonly type: 'choose';
@@ -222,6 +223,12 @@ export interface ExplorationView extends BaseGameView {
   readonly grid: MapViewGrid;
 }
 
+export interface EventView extends BaseGameView {
+  readonly kind: 'event';
+  readonly heading: string;
+  readonly copy: readonly string[];
+}
+
 export interface CombatView extends BaseGameView {
   readonly kind: 'combat';
   readonly heroClass: HeroClass;
@@ -274,6 +281,7 @@ export interface DeathView extends BaseGameView {
 export type GameView =
   | ClassSelectView
   | ExplorationView
+  | EventView
   | CombatView
   | SpellSelectView
   | LootSelectView
@@ -281,9 +289,9 @@ export type GameView =
   | DeathView;
 
 export type CombatantName =
-  'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT';
+  'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT' | 'DANGER';
 
-export type RollStat = 'P' | 'D' | 'S';
+export type RollStat = 'P' | 'D' | 'S' | 'L' | 'X';
 
 export interface RollSidePresentation {
   readonly name: CombatantName;
@@ -296,7 +304,8 @@ export interface RollSidePresentation {
 
 export interface OpposedRollPresentation {
   readonly kind: 'opposed-roll';
-  readonly purpose: 'initiative' | 'attack' | 'run' | 'spell' | 'steal';
+  readonly purpose:
+    'initiative' | 'attack' | 'run' | 'spell' | 'steal' | 'event';
   readonly prompt: string;
   readonly left: RollSidePresentation;
   readonly right: RollSidePresentation;
