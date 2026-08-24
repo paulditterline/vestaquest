@@ -1,5 +1,7 @@
 import { CLASS_EQUIPMENT, EQUIPMENT, type EnemyId } from './balance.js';
+import { shortestRoomPath } from './encounters.js';
 import { rollDie, type RngState } from './rng.js';
+import type { DungeonTopology, RoomId } from './topology.js';
 import type {
   Equipment,
   EquipmentItemId,
@@ -22,6 +24,11 @@ export const EVENT_IDS = [
 
 export type EventId = (typeof EVENT_IDS)[number];
 export type EventCheckStat = 'power' | 'defense' | 'skill' | 'luck';
+
+export type PlacedEvent = Readonly<{
+  roomId: RoomId;
+  eventId: EventId;
+}>;
 
 export type EventDestination =
   | Readonly<{ kind: 'node'; nodeId: string }>
@@ -56,6 +63,7 @@ export type EventChoiceResolution =
 export type EventChoiceDefinition = Readonly<{
   id: string;
   label: string;
+  resolvesEvent?: boolean;
   resolution: EventChoiceResolution;
 }>;
 
@@ -251,6 +259,7 @@ export const SOLID_DOOR_EVENT: EventDefinition = Object.freeze({
         Object.freeze({
           id: 'bash',
           label: 'BASH THE DOOR',
+          resolvesEvent: true,
           resolution: Object.freeze({
             kind: 'opposed-check',
             stat: 'power',
@@ -302,6 +311,35 @@ export function getEventDefinition(eventId: EventId): EventDefinition {
   const definition = AUTHORED_EVENTS.find(({ id }) => id === eventId);
   if (!definition) throw new RangeError(`Unknown authored event ${eventId}.`);
   return definition;
+}
+
+/**
+ * Temporary Slice 7 playtest placement. It stages one Solid Door in an empty
+ * off-route room when possible, without consuming RNG or defining the final
+ * event frequency/distribution model.
+ */
+export function placePlaytestSolidDoor(
+  topology: DungeonTopology,
+  exitRoomId: RoomId,
+  occupiedRoomIds: readonly RoomId[],
+): PlacedEvent {
+  const unavailable = new Set<RoomId>([
+    topology.entranceRoomId,
+    exitRoomId,
+    ...occupiedRoomIds,
+  ]);
+  const directRoute = new Set(
+    shortestRoomPath(topology, topology.entranceRoomId, exitRoomId),
+  );
+  const offRoute = topology.rooms.find(
+    ({ id }) => !unavailable.has(id) && !directRoute.has(id),
+  );
+  const fallback = topology.rooms.find(({ id }) => !unavailable.has(id));
+  const room = offRoute ?? fallback;
+  if (!room) {
+    throw new RangeError('Solid Door playtest placement has no empty room.');
+  }
+  return Object.freeze({ roomId: room.id, eventId: 'solid-door' });
 }
 
 /**

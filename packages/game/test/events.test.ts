@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AUTHORED_TOPOLOGIES,
   createEventCheckPresentation,
   createRng,
   HERO_STARTING_STATS,
+  placePlaytestSolidDoor,
   resolveSolidDoorCache,
   rollEventCheck,
   SOLID_DOOR_EVENT,
+  shortestRoomPath,
   validateEventDefinition,
   type EventDefinition,
 } from '../src/index.js';
@@ -433,5 +436,31 @@ describe('authored dungeon events', () => {
     });
     expect(result.reward.message.length).toBeLessThanOrEqual(22);
     expect(result.rng.draws).toBe(0);
+  });
+
+  it('stages the playtest door away from the entrance and exit', () => {
+    for (const topology of AUTHORED_TOPOLOGIES) {
+      for (const exitRoomId of topology.exitCandidateRoomIds) {
+        const directRoute = shortestRoomPath(
+          topology,
+          topology.entranceRoomId,
+          exitRoomId,
+        );
+        const placement = placePlaytestSolidDoor(topology, exitRoomId, []);
+        expect(placement).toMatchObject({ eventId: 'solid-door' });
+        expect(placement.roomId).not.toBe(topology.entranceRoomId);
+        expect(placement.roomId).not.toBe(exitRoomId);
+        if (
+          topology.rooms.some(
+            ({ id }) =>
+              id !== topology.entranceRoomId &&
+              id !== exitRoomId &&
+              !directRoute.includes(id),
+          )
+        ) {
+          expect(directRoute).not.toContain(placement.roomId);
+        }
+      }
+    }
   });
 });

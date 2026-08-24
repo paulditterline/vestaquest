@@ -447,6 +447,7 @@ function parseAcceptedCommand(value: unknown): AcceptedCommandEntry {
       'class-select',
       'exploration',
       'combat',
+      'event',
       'victory',
       'death',
     ] as const),
