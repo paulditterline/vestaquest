@@ -6,7 +6,11 @@ import {
   applyCommand,
   createRun,
   deriveView,
+  DIRECTIONS,
+  getRoom,
+  getTopology,
   replayRun,
+  shortestRoomPath,
   type AcceptedCommandEntry,
   type RunState,
 } from '../src/index.js';
@@ -38,6 +42,49 @@ function jsonCopy<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function eventRunWithoutInterveningCombat(): RunState {
+  for (let seed = 1; seed <= 1_000; seed += 1) {
+    let state = advance(createRun(seed), `class-${seed}`, CHOICE_IDS.warrior);
+    if (state.phase.kind !== 'exploration') continue;
+    const topology = getTopology(state.phase.dungeon.topologyId);
+    const event = state.phase.dungeon.events[0];
+    if (!event) continue;
+    const path = shortestRoomPath(
+      topology,
+      topology.entranceRoomId,
+      event.roomId,
+    );
+    const occupied = new Set(
+      state.phase.dungeon.encounters.map(({ roomId }) => roomId),
+    );
+    if (path.slice(1).some((roomId) => occupied.has(roomId))) continue;
+
+    for (const [index, roomId] of path.slice(1).entries()) {
+      if (state.phase.kind !== 'exploration') {
+        throw new Error('Expected uninterrupted exploration to the event.');
+      }
+      const current = getRoom(topology, state.phase.dungeon.currentRoomId);
+      const direction = DIRECTIONS.find((candidate) => {
+        const connection = current.connections[candidate];
+        return connection?.kind === 'room' && connection.roomId === roomId;
+      });
+      if (!direction) throw new Error('Event path has no matching direction.');
+      const choiceId = {
+        N: CHOICE_IDS.north,
+        E: CHOICE_IDS.east,
+        S: CHOICE_IDS.south,
+        W: CHOICE_IDS.west,
+      }[direction];
+      state = advance(state, `event-move-${seed}-${index}`, choiceId);
+    }
+    if (state.phase.kind !== 'event') {
+      throw new Error('Expected to enter the staged event.');
+    }
+    return state;
+  }
+  throw new Error('Could not find a clear seeded path to the staged event.');
+}
+
 describe('accepted-command replay', () => {
   it('reproduces exact exploration state from seed and accepted log', () => {
     const original = explored();
@@ -52,6 +99,30 @@ describe('accepted-command replay', () => {
       JSON.stringify(original.acceptedCommands),
     ) as AcceptedCommandEntry[];
     expect(replayRun(original.seed, persisted)).toEqual(original);
+  });
+
+  it('replays a staged Solid Door attempt and terminal cache flow exactly', () => {
+    let original = eventRunWithoutInterveningCombat();
+    original = advance(original, 'event-bash', 'event.solid-door.bash');
+    if (original.phase.kind !== 'event') {
+      throw new Error('Bash should remain on an event result screen.');
+    }
+    const finalChoice =
+      original.phase.screen.kind === 'node'
+        ? 'event.solid-door.withdraw'
+        : original.phase.screen.kind === 'equipment'
+          ? 'event.solid-door.leave'
+          : 'event.solid-door.continue';
+    original = advance(original, 'event-finish', finalChoice);
+    expect(original.phase.kind).toBe('exploration');
+
+    const persisted = jsonCopy(original.acceptedCommands);
+    const replayed = replayRun(original.seed, persisted);
+    expect(replayed).toEqual(original);
+    if (replayed.phase.kind !== 'exploration') {
+      throw new Error('Expected replayed exploration.');
+    }
+    expect(replayed.phase.dungeon.events[0]?.status).toBe('resolved');
   });
 
   it('replays partial logs to their stable intermediate map', () => {

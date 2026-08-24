@@ -42,6 +42,8 @@ export type EquipmentDefinition = Readonly<{
   bonus: 1;
 }>;
 
+export type EquipmentSlot = EquipmentDefinition['slot'];
+
 export const EQUIPMENT: Readonly<Record<EquipmentItemId, EquipmentDefinition>> =
   Object.freeze({
     'ghoul-fang': Object.freeze({
@@ -107,6 +109,14 @@ export const ENEMY_STEAL_LOOT: Readonly<Record<EnemyId, EquipmentItemId>> =
     ghoul: 'ghoul-fang',
     'skeleton-knight': 'bone-mail',
   });
+
+export const CLASS_EQUIPMENT: Readonly<
+  Record<HeroClass, Readonly<Record<EquipmentSlot, EquipmentItemId>>>
+> = Object.freeze({
+  warrior: Object.freeze({ weapon: 'iron-sword', armor: 'chain-mail' }),
+  rogue: Object.freeze({ weapon: 'shadow-knife', armor: 'night-cloak' }),
+  wizard: Object.freeze({ weapon: 'ash-wand', armor: 'rune-robe' }),
+});
 
 export const CLASS_BATTLE_LOOT: Readonly<
   Record<HeroClass, Readonly<Record<EnemyId, EquipmentItemId>>>

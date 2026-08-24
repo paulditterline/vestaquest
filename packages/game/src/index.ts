@@ -8,6 +8,7 @@ export {
 } from './game.js';
 export {
   CLASS_BATTLE_LOOT,
+  CLASS_EQUIPMENT,
   ENEMIES,
   ENEMY_STEAL_LOOT,
   EQUIPMENT,
@@ -21,6 +22,7 @@ export type {
   EnemyDefinition,
   EnemyId,
   EquipmentDefinition,
+  EquipmentSlot,
   HeroStats,
   SpellAffinity,
 } from './balance.js';
@@ -45,6 +47,30 @@ export type {
 } from './combat.js';
 export { placeCoreEncounters, shortestRoomPath } from './encounters.js';
 export type { EncounterPlacement, PlacedEncounter } from './encounters.js';
+export {
+  AUTHORED_EVENTS,
+  EVENT_IDS,
+  SOLID_DOOR_EVENT,
+  createEventCheckPresentation,
+  getEventDefinition,
+  placePlaytestSolidDoor,
+  resolveSolidDoorCache,
+  rollEventCheck,
+  validateEventDefinition,
+} from './events.js';
+export type {
+  EventCheckResult,
+  EventCheckStat,
+  EventChoiceDefinition,
+  EventChoiceResolution,
+  EventDefinition,
+  EventDestination,
+  EventId,
+  EventNodeDefinition,
+  PlacedEvent,
+  SolidDoorCacheResult,
+  SolidDoorCacheReward,
+} from './events.js';
 export { RNG_VERSION, createRng, nextUint32, rollDie } from './rng.js';
 export {
   AUTHORED_TOPOLOGIES,
@@ -80,10 +106,14 @@ export type {
   DeathPhase,
   DeathView,
   DungeonRunState,
+  DungeonEventRunState,
   Equipment,
   EquipmentItemId,
   EquipmentItemName,
   EncounterRunState,
+  EventView,
+  EventPhase,
+  EventScreen,
   ExplorationPhase,
   ExplorationView,
   GameChoice,

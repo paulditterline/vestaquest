@@ -10,6 +10,7 @@ import {
   deriveTitlePresentation,
   replayRun,
   type AcceptedCommandEntry,
+  type ChoiceId,
   type CombatNoticePresentation,
   type GamePresentation,
   type GameView,
@@ -446,6 +447,7 @@ function parseAcceptedCommand(value: unknown): AcceptedCommandEntry {
       'class-select',
       'exploration',
       'combat',
+      'event',
       'victory',
       'death',
     ] as const),
@@ -541,6 +543,7 @@ function parseGamePresentation(value: unknown): GamePresentation {
       'run',
       'spell',
       'steal',
+      'event',
     ] as const),
     prompt,
     left: parseRollSide(presentation.left),
@@ -615,10 +618,17 @@ function parseRollSide(value: unknown): OpposedRollPresentation['left'] {
       'WIZARD',
       'GHOUL',
       'SKELETON KNIGHT',
+      'DANGER',
     ] as const),
     diceLabel,
     dice,
-    modifierStat: requireEnum(side.modifierStat, ['P', 'D', 'S'] as const),
+    modifierStat: requireEnum(side.modifierStat, [
+      'P',
+      'D',
+      'S',
+      'L',
+      'X',
+    ] as const),
     modifier,
     total,
   });
@@ -629,6 +639,7 @@ function parseGameView(value: unknown): GameView {
   const kind = requireEnum(view.kind, [
     'class-select',
     'exploration',
+    'event',
     'combat',
     'spell-select',
     'loot-select',
@@ -723,6 +734,37 @@ function parseGameView(value: unknown): GameView {
         canUseItem,
         grid: parseMapGrid(view.grid),
       });
+    }
+    case 'event': {
+      requireKeys(view, [
+        'id',
+        'revision',
+        'choices',
+        'kind',
+        'heading',
+        'copy',
+      ]);
+      if (!Array.isArray(view.copy)) {
+        throw new PersistenceCorruptionError('event view');
+      }
+      const heading = requireString(view.heading);
+      const copy = Object.freeze(view.copy.map(requireString));
+      if (
+        heading.length < 1 ||
+        heading.length > 22 ||
+        copy.length < 1 ||
+        choices.length < 1 ||
+        choices.length > 4 ||
+        copy.length + choices.length > 5 ||
+        copy.some((line) => line.length < 1 || line.length > 22) ||
+        choices.some(
+          (choice, index) =>
+            choice.number !== index + 1 || choice.label.length > 20,
+        )
+      ) {
+        throw new PersistenceCorruptionError('event view');
+      }
+      return Object.freeze({ ...base, kind, heading, copy });
     }
     case 'combat': {
       requireKeys(view, [
@@ -963,32 +1005,42 @@ function parseChoices(value: unknown) {
     value.map((choice) => {
       const record = requireExactObject(choice, ['id', 'number', 'label']);
       return Object.freeze({
-        id: requireEnum(record.id, [
-          'class.warrior',
-          'class.rogue',
-          'class.wizard',
-          'move.north',
-          'move.east',
-          'move.south',
-          'move.west',
-          'action.item',
-          'combat.attack',
-          'combat.smash',
-          'combat.steal',
-          'combat.spell',
-          'combat.run',
-          'spell.fireball',
-          'spell.lightning',
-          'spell.stun',
-          'spell.cancel',
-          'loot.equip',
-          'loot.leave',
-        ] as const),
+        id: parseChoiceId(record.id),
         number: requirePositiveInteger(record.number, 'choice number'),
         label: requireString(record.label),
       });
     }),
   );
+}
+
+function parseChoiceId(value: unknown): ChoiceId {
+  if (
+    typeof value === 'string' &&
+    /^event\.[a-z0-9-]+\.[a-z0-9-]+$/.test(value)
+  ) {
+    return value as ChoiceId;
+  }
+  return requireEnum(value, [
+    'class.warrior',
+    'class.rogue',
+    'class.wizard',
+    'move.north',
+    'move.east',
+    'move.south',
+    'move.west',
+    'action.item',
+    'combat.attack',
+    'combat.smash',
+    'combat.steal',
+    'combat.spell',
+    'combat.run',
+    'spell.fireball',
+    'spell.lightning',
+    'spell.stun',
+    'spell.cancel',
+    'loot.equip',
+    'loot.leave',
+  ] as const);
 }
 
 function parseMapGrid(value: unknown): MapViewGrid {

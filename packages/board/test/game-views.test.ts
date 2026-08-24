@@ -51,6 +51,24 @@ describe('semantic game-view renderers', () => {
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 
+  it('renders a board-first authored event choice', () => {
+    const view: GameView = {
+      id: 'event-review',
+      revision: 4,
+      kind: 'event',
+      heading: 'SOLID DOOR',
+      copy: ['A SOLID DOOR WAITS'],
+      choices: [
+        { id: 'event.solid-door.bash', number: 1, label: 'BASH THE DOOR' },
+        { id: 'event.solid-door.listen', number: 2, label: 'LISTEN' },
+        { id: 'event.solid-door.leave', number: 3, label: 'LEAVE' },
+      ],
+    };
+    const layout = renderGameView(view, 'black');
+    expect(isFlagshipLayout(layout)).toBe(true);
+    expect(snapshotLayout(layout)).toMatchSnapshot();
+  });
+
   it('renders the live combat menu with both HP bars and legal actions', () => {
     let state = choose(createRun(10), CHOICE_IDS.warrior, 'select-warrior');
     state = choose(state, CHOICE_IDS.north, 'north');
@@ -156,6 +174,37 @@ describe('semantic game-view renderers', () => {
     expect(result[1]?.slice(3, 7)).toEqual([56, 56, 56, 56]);
     expect(result[3]?.slice(3, 7)).toEqual([56, 56, 56, 56]);
     expect(snapshotLayout(result)).toMatchSnapshot();
+  });
+
+  it('renders an event check against generic danger with Luck', () => {
+    const presentation: GamePresentation = {
+      kind: 'opposed-roll',
+      purpose: 'event',
+      prompt: 'SEARCH THE DARK',
+      left: {
+        name: 'ROGUE',
+        diceLabel: 'D6',
+        dice: [4],
+        modifierStat: 'L',
+        modifier: 5,
+        total: 9,
+      },
+      right: {
+        name: 'DANGER',
+        diceLabel: 'D6',
+        dice: [2],
+        modifierStat: 'X',
+        modifier: 4,
+        total: 6,
+      },
+      verdict: 'YOU FIND A CLUE',
+    };
+    expect(
+      snapshotLayout(renderOpposedRollScaffold(presentation)),
+    ).toMatchSnapshot();
+    expect(
+      snapshotLayout(renderOpposedRollResult(presentation)),
+    ).toMatchSnapshot();
   });
 
   it('renders a healing result before the enemy response', () => {

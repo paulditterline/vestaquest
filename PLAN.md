@@ -548,6 +548,8 @@ Acceptance:
 
 Branch: `codex/dungeon-events`
 
+Status: **Active**. The event foundation defines and validates finite authored graphs with one-to-four numbered choices, immediate or visible opposed-check branches, explicit terminal outcomes, truth-tagged transient clues, exact 6x22 event views, controller contracts, and restart-safe presentation intents. The owner approved the first Solid Door on 2026-08-24: Warrior `2D6` keep-high plus Power versus `D6 + DANGER 4`, other classes `D6 + POWER`, ties fail, and one harmless failed attempt per run. Its successful cache uses equal odds among eligible dust, Healing Draught, and missing-slot class-equipment outcomes; a fully stocked hero finds only dust. The complete choice, opposed roll, cache, Equip/Leave, resolution, revisit, and replay path is in the live kernel and passed owner Board Lab review on 2026-08-24, including correct combined level/equipment stats and no retrigger after backtracking. One door remains temporarily staged in an empty off-route-preferred room; this does not settle final event frequency or distribution.
+
 Build:
 
 - Reusable multi-step event state machine with numbered choices and visible opposed checks.

@@ -2,10 +2,11 @@ import type { RngState } from './rng.js';
 import type { HeroStats } from './balance.js';
 import type { EnemyId } from './balance.js';
 import type { OpposedRoll } from './combat.js';
+import type { EventId } from './events.js';
 import type { Direction, RoomId } from './topology.js';
 
-export const GAME_STATE_VERSION = 5 as const;
-export const GAME_RULES_VERSION = 'class-loot-v1' as const;
+export const GAME_STATE_VERSION = 6 as const;
+export const GAME_RULES_VERSION = 'dungeon-events-v1' as const;
 
 export const HERO_CLASSES = ['warrior', 'rogue', 'wizard'] as const;
 export type HeroClass = (typeof HERO_CLASSES)[number];
@@ -32,7 +33,8 @@ export const CHOICE_IDS = {
   run: 'combat.run',
 } as const;
 
-export type ChoiceId = (typeof CHOICE_IDS)[keyof typeof CHOICE_IDS];
+export type ChoiceId =
+  (typeof CHOICE_IDS)[keyof typeof CHOICE_IDS] | `event.${string}`;
 
 export interface ChooseCommand {
   readonly type: 'choose';
@@ -80,6 +82,7 @@ export interface DungeonRunState {
   readonly visitedRoomIds: readonly RoomId[];
   readonly revealedDeadEndPositions: readonly string[];
   readonly encounters: readonly EncounterRunState[];
+  readonly events: readonly DungeonEventRunState[];
 }
 
 export interface EncounterRunState {
@@ -88,6 +91,12 @@ export interface EncounterRunState {
   readonly currentHp: number;
   readonly status: 'active' | 'resolved';
   readonly stealUsed: boolean;
+}
+
+export interface DungeonEventRunState {
+  readonly roomId: RoomId;
+  readonly eventId: EventId;
+  readonly status: 'active' | 'resolved';
 }
 
 export interface ExplorationPhase {
@@ -121,6 +130,31 @@ export interface CombatPhase {
   readonly pendingLoot: EquipmentItemId | null;
 }
 
+export type EventScreen =
+  | Readonly<{ kind: 'node'; nodeId: string }>
+  | Readonly<{
+      kind: 'reward';
+      heading: string;
+      copy: readonly string[];
+    }>
+  | Readonly<{
+      kind: 'equipment';
+      itemId: EquipmentItemId;
+    }>;
+
+export interface EventPhase {
+  readonly kind: 'event';
+  readonly heroClass: HeroClass;
+  readonly stats: HeroStats;
+  readonly consumable: 'healing-draught' | null;
+  readonly scrollPouch: ScrollPouch;
+  readonly equipment: Equipment;
+  readonly enemiesSlain: number;
+  readonly dungeon: DungeonRunState;
+  readonly eventId: EventId;
+  readonly screen: EventScreen;
+}
+
 export interface VictoryPhase {
   readonly kind: 'victory';
   readonly heroClass: HeroClass;
@@ -138,7 +172,12 @@ export interface DeathPhase {
 }
 
 export type RunPhase =
-  ClassSelectPhase | ExplorationPhase | CombatPhase | VictoryPhase | DeathPhase;
+  | ClassSelectPhase
+  | ExplorationPhase
+  | CombatPhase
+  | EventPhase
+  | VictoryPhase
+  | DeathPhase;
 
 export interface AcceptedCommandEntry {
   readonly sequence: number;
@@ -222,6 +261,12 @@ export interface ExplorationView extends BaseGameView {
   readonly grid: MapViewGrid;
 }
 
+export interface EventView extends BaseGameView {
+  readonly kind: 'event';
+  readonly heading: string;
+  readonly copy: readonly string[];
+}
+
 export interface CombatView extends BaseGameView {
   readonly kind: 'combat';
   readonly heroClass: HeroClass;
@@ -274,6 +319,7 @@ export interface DeathView extends BaseGameView {
 export type GameView =
   | ClassSelectView
   | ExplorationView
+  | EventView
   | CombatView
   | SpellSelectView
   | LootSelectView
@@ -281,9 +327,9 @@ export type GameView =
   | DeathView;
 
 export type CombatantName =
-  'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT';
+  'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT' | 'DANGER';
 
-export type RollStat = 'P' | 'D' | 'S';
+export type RollStat = 'P' | 'D' | 'S' | 'L' | 'X';
 
 export interface RollSidePresentation {
   readonly name: CombatantName;
@@ -296,7 +342,8 @@ export interface RollSidePresentation {
 
 export interface OpposedRollPresentation {
   readonly kind: 'opposed-roll';
-  readonly purpose: 'initiative' | 'attack' | 'run' | 'spell' | 'steal';
+  readonly purpose:
+    'initiative' | 'attack' | 'run' | 'spell' | 'steal' | 'event';
   readonly prompt: string;
   readonly left: RollSidePresentation;
   readonly right: RollSidePresentation;

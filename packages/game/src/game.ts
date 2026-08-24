@@ -20,6 +20,14 @@ import {
 } from './combat.js';
 import { placeCoreEncounters } from './encounters.js';
 import {
+  createEventCheckPresentation,
+  getEventDefinition,
+  placePlaytestSolidDoor,
+  resolveSolidDoorCache,
+  rollEventCheck,
+  type EventDestination,
+} from './events.js';
+import {
   DIRECTIONS,
   MAP_SIZE,
   getRoom,
@@ -43,6 +51,7 @@ import {
   type DungeonRunState,
   type Equipment,
   type EquipmentItemId,
+  type EventPhase,
   type ExplorationPhase,
   type GameChoice,
   type GameCommand,
@@ -263,6 +272,65 @@ export function deriveView(state: RunState): GameView {
         choices: freezeChoices(choices),
       });
     }
+    case 'event': {
+      const eventPhase = state.phase;
+      const definition = getEventDefinition(eventPhase.eventId);
+      if (eventPhase.screen.kind === 'node') {
+        const nodeId = eventPhase.screen.nodeId;
+        const node = definition.nodes.find(({ id }) => id === nodeId);
+        if (!node) throw new Error('Event phase references an unknown node.');
+        return Object.freeze({
+          ...base,
+          kind: 'event',
+          heading: definition.heading,
+          copy: node.copy,
+          choices: freezeChoices(
+            node.choices.map((choice, index) => ({
+              id: eventChoiceId(eventPhase.eventId, choice.id),
+              number: index + 1,
+              label: choice.label,
+            })),
+          ),
+        });
+      }
+      if (eventPhase.screen.kind === 'equipment') {
+        const item = EQUIPMENT[eventPhase.screen.itemId];
+        return Object.freeze({
+          ...base,
+          kind: 'event',
+          heading: 'HIDDEN CACHE',
+          copy: Object.freeze([
+            item.name,
+            `${item.slot.toUpperCase()} +1 ${item.stat.toUpperCase()}`,
+          ]),
+          choices: freezeChoices([
+            {
+              id: eventChoiceId(eventPhase.eventId, 'equip'),
+              number: 1,
+              label: 'EQUIP',
+            },
+            {
+              id: eventChoiceId(eventPhase.eventId, 'leave'),
+              number: 2,
+              label: 'LEAVE',
+            },
+          ]),
+        });
+      }
+      return Object.freeze({
+        ...base,
+        kind: 'event',
+        heading: eventPhase.screen.heading,
+        copy: eventPhase.screen.copy,
+        choices: freezeChoices([
+          {
+            id: eventChoiceId(eventPhase.eventId, 'continue'),
+            number: 1,
+            label: 'CONTINUE',
+          },
+        ]),
+      });
+    }
     case 'victory':
       return Object.freeze({
         ...base,
@@ -421,6 +489,16 @@ function transitionFromChoice(
             }),
           ),
         ),
+        events: Object.freeze([
+          Object.freeze({
+            ...placePlaytestSolidDoor(
+              getTopology(selected.topologyId),
+              selected.exitRoomId,
+              placement.encounters.map(({ roomId }) => roomId),
+            ),
+            status: 'active' as const,
+          }),
+        ]),
       });
       return {
         phase: Object.freeze({
@@ -444,6 +522,8 @@ function transitionFromChoice(
       return move(state.phase, directionForChoice(choiceId), state.rng);
     case 'combat':
       return transitionCombat(state.phase, choiceId, state.rng);
+    case 'event':
+      return transitionEvent(state.phase, choiceId, state.rng);
     case 'victory':
     case 'death':
       throw new Error('Terminal phases cannot transition.');
@@ -516,9 +596,19 @@ function move(
     (candidate) =>
       candidate.roomId === connection.roomId && candidate.status === 'active',
   );
-  return encounter
-    ? enterCombat(moved, phase.dungeon.currentRoomId, encounter.roomId, rng)
-    : { phase: moved, rng };
+  if (encounter) {
+    return enterCombat(
+      moved,
+      phase.dungeon.currentRoomId,
+      encounter.roomId,
+      rng,
+    );
+  }
+  const event = dungeon.events.find(
+    (candidate) =>
+      candidate.roomId === connection.roomId && candidate.status === 'active',
+  );
+  return event ? enterEvent(moved, event.eventId, rng) : { phase: moved, rng };
 }
 
 function useMapItem(phase: ExplorationPhase): ExplorationPhase {
@@ -535,6 +625,213 @@ function useMapItem(phase: ExplorationPhase): ExplorationPhase {
       ...phase.stats,
       hp: Math.min(phase.stats.maximumHp, phase.stats.hp + 2),
     }),
+  });
+}
+
+function enterEvent(
+  phase: ExplorationPhase,
+  eventId: EventPhase['eventId'],
+  rng: RunState['rng'],
+): TransitionResult {
+  const definition = getEventDefinition(eventId);
+  return {
+    phase: Object.freeze({
+      ...phase,
+      kind: 'event',
+      eventId,
+      screen: Object.freeze({
+        kind: 'node',
+        nodeId: definition.startNodeId,
+      }),
+    }),
+    rng,
+  };
+}
+
+function transitionEvent(
+  phase: EventPhase,
+  choiceId: ChoiceId,
+  rng: RunState['rng'],
+): TransitionResult {
+  const screen = phase.screen;
+  if (screen.kind === 'reward') {
+    requireEventChoice(phase.eventId, choiceId, 'continue');
+    return { phase: returnFromEvent(phase), rng };
+  }
+  if (screen.kind === 'equipment') {
+    const choice = eventChoiceName(phase.eventId, choiceId);
+    if (choice !== 'equip' && choice !== 'leave') {
+      throw new Error('Equipment cache requires Equip or Leave.');
+    }
+    return {
+      phase: returnFromEvent(
+        choice === 'equip' ? equipEventItem(phase, screen.itemId) : phase,
+      ),
+      rng,
+    };
+  }
+
+  const definition = getEventDefinition(phase.eventId);
+  const node = definition.nodes.find(({ id }) => id === screen.nodeId);
+  if (!node) throw new Error('Event phase references an unknown node.');
+  const choiceName = eventChoiceName(phase.eventId, choiceId);
+  const choice = node.choices.find(({ id }) => id === choiceName);
+  if (!choice) throw new Error('Event choice is not available at this node.');
+  const attempted = choice.resolvesEvent ? resolveActiveEvent(phase) : phase;
+  if (choice.resolution.kind === 'immediate') {
+    return applyEventDestination(attempted, choice.resolution.destination, rng);
+  }
+
+  const statValue = attempted.stats[choice.resolution.stat];
+  const result = rollEventCheck(
+    statValue,
+    choice.resolution.danger,
+    choice.resolution.ties,
+    rng,
+    choice.resolution.keepHighFor.includes(attempted.heroClass),
+  );
+  const destination = result.succeeded
+    ? choice.resolution.success
+    : choice.resolution.failure;
+  const transitioned = applyEventDestination(
+    attempted,
+    destination,
+    result.rng,
+  );
+  return {
+    ...transitioned,
+    presentations: Object.freeze([
+      createEventCheckPresentation({
+        heroClass: attempted.heroClass,
+        stat: choice.resolution.stat,
+        statValue,
+        danger: choice.resolution.danger,
+        result,
+        prompt: choice.resolution.prompt,
+        verdict: result.succeeded
+          ? choice.resolution.successVerdict
+          : choice.resolution.failureVerdict,
+      }),
+      ...(transitioned.presentations ?? NO_PRESENTATIONS),
+    ]),
+  };
+}
+
+function applyEventDestination(
+  phase: EventPhase,
+  destination: EventDestination,
+  rng: RunState['rng'],
+): TransitionResult {
+  switch (destination.kind) {
+    case 'node':
+      return {
+        phase: Object.freeze({
+          ...phase,
+          screen: Object.freeze({ kind: 'node', nodeId: destination.nodeId }),
+        }),
+        rng,
+      };
+    case 'return-to-map':
+      return { phase: returnFromEvent(phase), rng };
+    case 'reward': {
+      if (destination.rewardId !== 'solid-door-cache') {
+        throw new Error(`Unknown event reward ${destination.rewardId}.`);
+      }
+      const cache = resolveSolidDoorCache({
+        heroClass: phase.heroClass,
+        consumable: phase.consumable,
+        equipment: phase.equipment,
+        rng,
+      });
+      if (cache.reward.kind === 'equipment') {
+        return {
+          phase: Object.freeze({
+            ...phase,
+            screen: Object.freeze({
+              kind: 'equipment',
+              itemId: cache.reward.itemId,
+            }),
+          }),
+          rng: cache.rng,
+        };
+      }
+      const rewardedPhase =
+        cache.reward.kind === 'healing-draught'
+          ? Object.freeze({
+              ...phase,
+              consumable: cache.reward.consumable,
+            })
+          : phase;
+      return {
+        phase: Object.freeze({
+          ...rewardedPhase,
+          screen: Object.freeze({
+            kind: 'reward',
+            heading: 'HIDDEN CACHE',
+            copy: Object.freeze([
+              cache.reward.message,
+              ...(cache.reward.kind === 'healing-draught'
+                ? (['TAKEN'] as const)
+                : []),
+            ]),
+          }),
+        }),
+        rng: cache.rng,
+      };
+    }
+    case 'combat':
+    case 'injury':
+    case 'clue':
+      throw new Error(
+        `Event destination ${destination.kind} is not active yet.`,
+      );
+  }
+}
+
+function resolveActiveEvent(phase: EventPhase): EventPhase {
+  return Object.freeze({
+    ...phase,
+    dungeon: Object.freeze({
+      ...phase.dungeon,
+      events: Object.freeze(
+        phase.dungeon.events.map((event) =>
+          event.eventId === phase.eventId &&
+          event.roomId === phase.dungeon.currentRoomId
+            ? Object.freeze({ ...event, status: 'resolved' as const })
+            : event,
+        ),
+      ),
+    }),
+  });
+}
+
+function equipEventItem(
+  phase: EventPhase,
+  itemId: EquipmentItemId,
+): EventPhase {
+  const item = EQUIPMENT[itemId];
+  const previousId = phase.equipment[item.slot];
+  const previousBonus = previousId === null ? 0 : EQUIPMENT[previousId].bonus;
+  return Object.freeze({
+    ...phase,
+    stats: Object.freeze({
+      ...phase.stats,
+      [item.stat]: phase.stats[item.stat] - previousBonus + item.bonus,
+    }),
+    equipment: Object.freeze({ ...phase.equipment, [item.slot]: itemId }),
+  });
+}
+
+function returnFromEvent(phase: EventPhase): ExplorationPhase {
+  return Object.freeze({
+    kind: 'exploration',
+    heroClass: phase.heroClass,
+    stats: phase.stats,
+    consumable: phase.consumable,
+    scrollPouch: phase.scrollPouch,
+    equipment: phase.equipment,
+    enemiesSlain: phase.enemiesSlain,
+    dungeon: phase.dungeon,
   });
 }
 
@@ -1318,6 +1615,34 @@ function choiceForDirection(direction: Direction): ChoiceId {
       return CHOICE_IDS.south;
     case 'W':
       return CHOICE_IDS.west;
+  }
+}
+
+function eventChoiceId(
+  eventId: EventPhase['eventId'],
+  choiceId: string,
+): ChoiceId {
+  return `event.${eventId}.${choiceId}`;
+}
+
+function eventChoiceName(
+  eventId: EventPhase['eventId'],
+  choiceId: ChoiceId,
+): string {
+  const prefix = `event.${eventId}.`;
+  if (!choiceId.startsWith(prefix) || choiceId.length === prefix.length) {
+    throw new Error(`Choice ${choiceId} does not belong to event ${eventId}.`);
+  }
+  return choiceId.slice(prefix.length);
+}
+
+function requireEventChoice(
+  eventId: EventPhase['eventId'],
+  choiceId: ChoiceId,
+  expected: string,
+): void {
+  if (eventChoiceName(eventId, choiceId) !== expected) {
+    throw new Error(`Event choice ${expected} is required.`);
   }
 }
 

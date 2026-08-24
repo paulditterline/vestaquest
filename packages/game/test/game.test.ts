@@ -45,6 +45,44 @@ function jsonCopy<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function solidDoorState(
+  rngSeed: number,
+  options: Readonly<{
+    classChoice?: string;
+    consumable?: 'healing-draught' | null;
+    equipment?: Readonly<{
+      weapon: 'iron-sword' | 'shadow-knife' | 'ash-wand' | null;
+      armor: 'chain-mail' | 'night-cloak' | 'rune-robe' | null;
+    }>;
+  }> = {},
+): RunState {
+  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.warrior);
+  if (state.phase.kind !== 'exploration') {
+    throw new Error('Expected exploration fixture.');
+  }
+  const event = state.phase.dungeon.events[0];
+  if (!event) throw new Error('Expected the staged Solid Door.');
+  return Object.freeze({
+    ...state,
+    rng: createRng(rngSeed),
+    phase: Object.freeze({
+      ...state.phase,
+      kind: 'event' as const,
+      consumable:
+        options.consumable === undefined
+          ? state.phase.consumable
+          : options.consumable,
+      equipment: options.equipment ?? state.phase.equipment,
+      dungeon: Object.freeze({
+        ...state.phase.dungeon,
+        currentRoomId: event.roomId,
+      }),
+      eventId: event.eventId,
+      screen: Object.freeze({ kind: 'node' as const, nodeId: 'approach' }),
+    }),
+  });
+}
+
 function escapeCrookedHalls(seed = 10): RunState {
   let state = beginExploration(seed);
   for (const choiceId of [
@@ -744,6 +782,167 @@ describe('map exploration game kernel', () => {
       { sequence: 2, resultingPhase: 'exploration', rngDraws: 6 },
       { sequence: 3, resultingPhase: 'exploration', rngDraws: 6 },
     ]);
+  });
+});
+
+describe('live Solid Door event flow', () => {
+  it('derives the authored board choice and lets leaving preserve the attempt', () => {
+    const state = solidDoorState(1);
+    expect(deriveView(state)).toMatchObject({
+      kind: 'event',
+      heading: 'SOLID DOOR',
+      copy: ['IRON BANDS CROSS IT'],
+      choices: [
+        { id: 'event.solid-door.bash', number: 1, label: 'BASH THE DOOR' },
+        { id: 'event.solid-door.leave', number: 2, label: 'LEAVE' },
+      ],
+    });
+
+    const left = choose(state, 'leave-door', 'event.solid-door.leave');
+    expect(left.status).toBe('accepted');
+    if (left.status !== 'accepted') throw new Error(left.reason);
+    expect(left.state.phase.kind).toBe('exploration');
+    if (left.state.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration.');
+    }
+    expect(left.state.phase.dungeon.events[0]?.status).toBe('active');
+    expect(left.state.rng.draws).toBe(0);
+  });
+
+  it('records a failed Bash before the player withdraws', () => {
+    let failed:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        solidDoorState(seed),
+        `bash-${seed}`,
+        'event.solid-door.bash',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'THE DOOR HOLDS'
+      ) {
+        failed = result;
+        break;
+      }
+    }
+    expect(failed).toBeDefined();
+    if (!failed || failed.state.phase.kind !== 'event') {
+      throw new Error('Expected a failed event result.');
+    }
+    expect(failed.presentations[0]).toMatchObject({
+      purpose: 'event',
+      prompt: 'BASH THE DOOR',
+      left: { name: 'WARRIOR', diceLabel: '2D6', modifierStat: 'P' },
+      right: { name: 'DANGER', diceLabel: 'D6', modifierStat: 'X' },
+      verdict: 'THE DOOR HOLDS',
+    });
+    expect(failed.state.phase.screen).toEqual({
+      kind: 'node',
+      nodeId: 'door-holds',
+    });
+    expect(failed.state.phase.dungeon.events[0]?.status).toBe('resolved');
+
+    const withdrawn = choose(
+      failed.state,
+      'withdraw',
+      'event.solid-door.withdraw',
+    );
+    expect(withdrawn.status).toBe('accepted');
+    if (withdrawn.status !== 'accepted') throw new Error(withdrawn.reason);
+    expect(withdrawn.state.phase.kind).toBe('exploration');
+    if (withdrawn.state.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration.');
+    }
+    expect(withdrawn.state.phase.dungeon.events[0]?.status).toBe('resolved');
+  });
+
+  it('applies every eligible successful cache result through its board flow', () => {
+    const found = new Map<
+      'dust' | 'healing-draught' | 'equipment',
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }>
+    >();
+    for (let seed = 1; seed <= 10_000 && found.size < 3; seed += 1) {
+      const result = choose(
+        solidDoorState(seed, { consumable: null }),
+        `bash-reward-${seed}`,
+        'event.solid-door.bash',
+      );
+      if (result.status !== 'accepted' || result.state.phase.kind !== 'event') {
+        continue;
+      }
+      const screen = result.state.phase.screen;
+      if (screen.kind === 'equipment') found.set('equipment', result);
+      if (screen.kind === 'reward' && screen.copy[0] === 'ONLY DUST REMAINS') {
+        found.set('dust', result);
+      }
+      if (screen.kind === 'reward' && screen.copy[0] === 'HEALING DRAUGHT') {
+        found.set('healing-draught', result);
+      }
+    }
+    expect([...found.keys()].sort()).toEqual([
+      'dust',
+      'equipment',
+      'healing-draught',
+    ]);
+
+    const dust = found.get('dust')!;
+    expect(deriveView(dust.state)).toMatchObject({
+      heading: 'HIDDEN CACHE',
+      copy: ['ONLY DUST REMAINS'],
+      choices: [{ label: 'CONTINUE' }],
+    });
+    const afterDust = choose(
+      dust.state,
+      'continue-dust',
+      'event.solid-door.continue',
+    );
+    expect(afterDust.status).toBe('accepted');
+    if (afterDust.status !== 'accepted') throw new Error(afterDust.reason);
+    expect(afterDust.state.phase.kind).toBe('exploration');
+
+    const draught = found.get('healing-draught')!;
+    expect(draught.state.phase).toMatchObject({
+      kind: 'event',
+      consumable: 'healing-draught',
+      screen: {
+        kind: 'reward',
+        heading: 'HIDDEN CACHE',
+        copy: ['HEALING DRAUGHT', 'TAKEN'],
+      },
+    });
+
+    const equipment = found.get('equipment')!;
+    if (
+      equipment.state.phase.kind !== 'event' ||
+      equipment.state.phase.screen.kind !== 'equipment'
+    ) {
+      throw new Error('Expected equipment cache.');
+    }
+    const itemId = equipment.state.phase.screen.itemId;
+    const beforePower = equipment.state.phase.stats.power;
+    const beforeDefense = equipment.state.phase.stats.defense;
+    expect(deriveView(equipment.state)).toMatchObject({
+      heading: 'HIDDEN CACHE',
+      choices: [{ label: 'EQUIP' }, { label: 'LEAVE' }],
+    });
+    const equipped = choose(
+      equipment.state,
+      'equip-cache',
+      'event.solid-door.equip',
+    );
+    expect(equipped.status).toBe('accepted');
+    if (equipped.status !== 'accepted') throw new Error(equipped.reason);
+    expect(equipped.state.phase.kind).toBe('exploration');
+    if (equipped.state.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration.');
+    }
+    expect(Object.values(equipped.state.phase.equipment)).toContain(itemId);
+    expect(
+      equipped.state.phase.stats.power + equipped.state.phase.stats.defense,
+    ).toBe(beforePower + beforeDefense + 1);
+    expect(equipped.state.phase.dungeon.events[0]?.status).toBe('resolved');
   });
 });
 
