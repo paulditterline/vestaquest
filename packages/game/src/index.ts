@@ -46,8 +46,11 @@ export type {
 export { placeCoreEncounters, shortestRoomPath } from './encounters.js';
 export type { EncounterPlacement, PlacedEncounter } from './encounters.js';
 export {
+  AUTHORED_EVENTS,
   EVENT_IDS,
+  SOLID_DOOR_EVENT,
   createEventCheckPresentation,
+  getEventDefinition,
   rollEventCheck,
   validateEventDefinition,
 } from './events.js';

@@ -548,7 +548,7 @@ Acceptance:
 
 Branch: `codex/dungeon-events`
 
-Status: **Active**. The first scaffold defines and validates finite authored event graphs with one-to-four numbered choices, immediate or visible opposed-check branches, explicit terminal outcomes, and truth-tagged transient clues. It deliberately does not settle room danger values, rewards, or outcome tables.
+Status: **Active**. The event foundation defines and validates finite authored graphs with one-to-four numbered choices, immediate or visible opposed-check branches, explicit terminal outcomes, truth-tagged transient clues, exact 6x22 event views, controller contracts, and restart-safe presentation intents. The owner approved the first Solid Door check on 2026-08-24: Warrior `2D6` keep-high plus Power versus `D6 + DANGER 4`, other classes `D6 + POWER`, ties fail, one harmless failed attempt per run. Its cache reward table remains open.
 
 Build:
 

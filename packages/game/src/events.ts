@@ -38,6 +38,10 @@ export type EventChoiceResolution =
       stat: EventCheckStat;
       danger: number;
       ties: 'success' | 'failure';
+      keepHighFor: readonly HeroClass[];
+      prompt: string;
+      successVerdict: string;
+      failureVerdict: string;
       success: EventDestination;
       failure: EventDestination;
     }>;
@@ -62,6 +66,7 @@ export type EventDefinition = Readonly<{
 }>;
 
 export type EventCheckResult = Readonly<{
+  playerDice: readonly number[];
   playerDie: number;
   dangerDie: number;
   playerTotal: number;
@@ -75,6 +80,7 @@ export function rollEventCheck(
   danger: number,
   ties: 'success' | 'failure',
   rng: RngState,
+  keepHigh = false,
 ): EventCheckResult {
   if (!Number.isInteger(statValue) || statValue < 0) {
     throw new RangeError('Event stat value must be a nonnegative integer.');
@@ -82,12 +88,22 @@ export function rollEventCheck(
   if (!Number.isInteger(danger) || danger < 0) {
     throw new RangeError('Event danger must be a nonnegative integer.');
   }
-  const player = rollDie(rng, 6);
-  const obstacle = rollDie(player.state, 6);
-  const playerTotal = player.value + statValue;
+  const firstPlayer = rollDie(rng, 6);
+  const secondPlayer = keepHigh ? rollDie(firstPlayer.state, 6) : undefined;
+  const playerDice = secondPlayer
+    ? Object.freeze(
+        [firstPlayer.value, secondPlayer.value].sort(
+          (left, right) => right - left,
+        ),
+      )
+    : Object.freeze([firstPlayer.value]);
+  const obstacle = rollDie(secondPlayer?.state ?? firstPlayer.state, 6);
+  const playerDie = playerDice[0]!;
+  const playerTotal = playerDie + statValue;
   const dangerTotal = obstacle.value + danger;
   return Object.freeze({
-    playerDie: player.value,
+    playerDice,
+    playerDie,
     dangerDie: obstacle.value,
     playerTotal,
     dangerTotal,
@@ -113,8 +129,8 @@ export function createEventCheckPresentation(input: {
     prompt: input.prompt,
     left: Object.freeze({
       name: heroName(input.heroClass),
-      diceLabel: 'D6',
-      dice: Object.freeze([input.result.playerDie]),
+      diceLabel: input.result.playerDice.length === 2 ? '2D6' : 'D6',
+      dice: input.result.playerDice,
       modifierStat: eventRollStat(input.stat),
       modifier: input.statValue,
       total: input.result.playerTotal,
@@ -129,6 +145,71 @@ export function createEventCheckPresentation(input: {
     }),
     verdict: input.verdict,
   });
+}
+
+export const SOLID_DOOR_EVENT: EventDefinition = Object.freeze({
+  id: 'solid-door',
+  heading: 'SOLID DOOR',
+  startNodeId: 'approach',
+  nodes: Object.freeze([
+    Object.freeze({
+      id: 'approach',
+      copy: Object.freeze(['IRON BANDS CROSS IT']),
+      choices: Object.freeze([
+        Object.freeze({
+          id: 'bash',
+          label: 'BASH THE DOOR',
+          resolution: Object.freeze({
+            kind: 'opposed-check',
+            stat: 'power',
+            danger: 4,
+            ties: 'failure',
+            keepHighFor: Object.freeze(['warrior'] as const),
+            prompt: 'BASH THE DOOR',
+            successVerdict: 'THE DOOR BREAKS',
+            failureVerdict: 'THE DOOR HOLDS',
+            success: Object.freeze({
+              kind: 'reward',
+              rewardId: 'solid-door-cache',
+            }),
+            failure: Object.freeze({ kind: 'node', nodeId: 'door-holds' }),
+          }),
+        }),
+        Object.freeze({
+          id: 'leave',
+          label: 'LEAVE',
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({ kind: 'return-to-map' }),
+          }),
+        }),
+      ]),
+    }),
+    Object.freeze({
+      id: 'door-holds',
+      copy: Object.freeze(['THE DOOR HOLDS']),
+      choices: Object.freeze([
+        Object.freeze({
+          id: 'withdraw',
+          label: 'WITHDRAW',
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({ kind: 'return-to-map' }),
+          }),
+        }),
+      ]),
+    }),
+  ]),
+});
+
+export const AUTHORED_EVENTS: readonly EventDefinition[] = Object.freeze([
+  SOLID_DOOR_EVENT,
+]);
+
+export function getEventDefinition(eventId: EventId): EventDefinition {
+  const definition = AUTHORED_EVENTS.find(({ id }) => id === eventId);
+  if (!definition) throw new RangeError(`Unknown authored event ${eventId}.`);
+  return definition;
 }
 
 /**
@@ -225,6 +306,22 @@ function validateResolution(
       `Event choice ${choiceId} danger must be a nonnegative integer.`,
     );
   }
+  if (new Set(resolution.keepHighFor).size !== resolution.keepHighFor.length) {
+    throw new RangeError(
+      `Event choice ${choiceId} has duplicate keep-high classes.`,
+    );
+  }
+  requireBoardLine(resolution.prompt, `Event choice ${choiceId} prompt`, 22);
+  requireBoardLine(
+    resolution.successVerdict,
+    `Event choice ${choiceId} success verdict`,
+    22,
+  );
+  requireBoardLine(
+    resolution.failureVerdict,
+    `Event choice ${choiceId} failure verdict`,
+    22,
+  );
   validateDestination(resolution.success, choiceId);
   validateDestination(resolution.failure, choiceId);
 }
@@ -342,4 +439,8 @@ function heroName(heroClass: HeroClass): 'WARRIOR' | 'ROGUE' | 'WIZARD' {
     case 'wizard':
       return 'WIZARD';
   }
+}
+
+for (const definition of AUTHORED_EVENTS) {
+  validateEventDefinition(definition);
 }

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   createEventCheckPresentation,
   createRng,
+  HERO_STARTING_STATS,
   rollEventCheck,
+  SOLID_DOOR_EVENT,
   validateEventDefinition,
   type EventDefinition,
 } from '../src/index.js';
@@ -24,6 +26,10 @@ const VALID_EVENT: EventDefinition = {
             stat: 'power',
             danger: 4,
             ties: 'failure',
+            keepHighFor: ['warrior'],
+            prompt: 'BASH THE DOOR',
+            successVerdict: 'THE DOOR BREAKS',
+            failureVerdict: 'THE DOOR HOLDS',
             success: { kind: 'reward', rewardId: 'door-cache' },
             failure: { kind: 'node', nodeId: 'door-holds' },
           },
@@ -157,6 +163,10 @@ describe('authored dungeon events', () => {
                 stat: 'power',
                 danger: -1,
                 ties: 'failure',
+                keepHighFor: ['warrior'],
+                prompt: 'BASH THE DOOR',
+                successVerdict: 'THE DOOR BREAKS',
+                failureVerdict: 'THE DOOR HOLDS',
                 success: { kind: 'reward', rewardId: 'door-cache' },
                 failure: { kind: 'node', nodeId: 'door-holds' },
               },
@@ -248,5 +258,71 @@ describe('authored dungeon events', () => {
       },
       verdict: 'YOU FIND A CLUE',
     });
+  });
+
+  it('authors the approved one-attempt Solid Door check without a reward table', () => {
+    expect(() => validateEventDefinition(SOLID_DOOR_EVENT)).not.toThrow();
+    const approach = SOLID_DOOR_EVENT.nodes[0]!;
+    const bash = approach.choices[0]?.resolution;
+    expect(approach.choices.map(({ label }) => label)).toEqual([
+      'BASH THE DOOR',
+      'LEAVE',
+    ]);
+    expect(bash).toMatchObject({
+      kind: 'opposed-check',
+      stat: 'power',
+      danger: 4,
+      ties: 'failure',
+      keepHighFor: ['warrior'],
+      success: { kind: 'reward', rewardId: 'solid-door-cache' },
+      failure: { kind: 'node', nodeId: 'door-holds' },
+    });
+    expect(SOLID_DOOR_EVENT.nodes[1]?.choices).toEqual([
+      {
+        id: 'withdraw',
+        label: 'WITHDRAW',
+        resolution: {
+          kind: 'immediate',
+          destination: { kind: 'return-to-map' },
+        },
+      },
+    ]);
+  });
+
+  it('keeps the Warrior most likely to break the Solid Door', () => {
+    const bash = SOLID_DOOR_EVENT.nodes[0]?.choices[0]?.resolution;
+    if (!bash || bash.kind !== 'opposed-check') {
+      throw new Error('Expected the authored Bash check.');
+    }
+    const attempts = 20_000;
+    const successRate = (heroClass: 'warrior' | 'rogue' | 'wizard') => {
+      const power = HERO_STARTING_STATS[heroClass].power;
+      let successes = 0;
+      for (let seed = 1; seed <= attempts; seed += 1) {
+        if (
+          rollEventCheck(
+            power,
+            bash.danger,
+            bash.ties,
+            createRng(seed),
+            bash.keepHighFor.includes(heroClass),
+          ).succeeded
+        ) {
+          successes += 1;
+        }
+      }
+      return successes / attempts;
+    };
+    const warrior = successRate('warrior');
+    const wizard = successRate('wizard');
+    const rogue = successRate('rogue');
+    expect(warrior).toBeGreaterThan(wizard + 0.1);
+    expect(wizard).toBeGreaterThan(rogue + 0.2);
+    expect(warrior).toBeGreaterThan(0.7);
+    expect(warrior).toBeLessThan(0.75);
+    expect(wizard).toBeGreaterThan(0.55);
+    expect(wizard).toBeLessThan(0.61);
+    expect(rogue).toBeGreaterThan(0.25);
+    expect(rogue).toBeLessThan(0.31);
   });
 });
