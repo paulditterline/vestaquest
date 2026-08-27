@@ -546,9 +546,9 @@ Acceptance:
 
 ### Slice 7 — events and dungeon information
 
-Branch: `codex/dungeon-events`
+Branch: `codex/trap-room-event`
 
-Status: **Active**. The event foundation defines and validates finite authored graphs with one-to-four numbered choices, immediate or visible opposed-check branches, margin/catastrophe outcomes, explicit terminal outcomes, truth-tagged transient clues, exact 6x22 event views, controller contracts, and restart-safe presentation intents. The approved Solid Door passed owner Board Lab review on 2026-08-24, including its eligible cache, correct combined level/equipment stats, and no retrigger after backtracking. The owner then approved Room of Blades: `D6 + SKILL` versus `D6 + DANGER 3`, ties fail, 1 HP ordinary failure, 2 HP failure at margin 3+, raw player `1` versus Danger `6` instant death, one attempt, and the shared eligible cache. One Solid Door and one Trap Room are temporarily staged in distinct empty, off-route-preferred rooms; this does not settle final event frequency or distribution.
+Status: **Active**. The event foundation defines and validates finite authored graphs with one-to-four numbered choices, immediate or visible opposed-check branches, margin/catastrophe outcomes, explicit terminal outcomes, truth-tagged transient clues, exact 6x22 event views, controller contracts, and restart-safe presentation intents. The approved Solid Door passed owner Board Lab review on 2026-08-24, including its eligible cache, correct combined level/equipment stats, and no retrigger after backtracking. Room of Blades uses `D6 + SKILL` versus `D6 + DANGER 3`; ties fail, ordinary failure deals 1 HP, failure by 3+ deals 2 HP, raw player `1` versus Danger `6` causes instant death, and success opens the shared eligible cache. Its success, cache/equip, combined-stat, persistence, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-08-26 with a Level 3 Rogue and Shadow Knife. One Solid Door and one Trap Room are temporarily staged in distinct empty, off-route-preferred rooms; this does not settle final event frequency or distribution.
 
 Build:
 
