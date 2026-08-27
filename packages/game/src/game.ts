@@ -23,6 +23,8 @@ import {
   createEventCheckPresentation,
   getEventDefinition,
   placePlaytestSolidDoor,
+  placePlaytestTrapRoom,
+  resolveEventCheckOutcome,
   resolveSolidDoorCache,
   rollEventCheck,
   type EventDestination,
@@ -48,6 +50,7 @@ import {
   type ChoiceId,
   type CombatantName,
   type CombatPhase,
+  type DeathCause,
   type DungeonRunState,
   type Equipment,
   type EquipmentItemId,
@@ -473,6 +476,17 @@ function transitionFromChoice(
         selected.exitRoomId,
         selected.rng,
       );
+      const topology = getTopology(selected.topologyId);
+      const encounterRoomIds = placement.encounters.map(({ roomId }) => roomId);
+      const solidDoor = placePlaytestSolidDoor(
+        topology,
+        selected.exitRoomId,
+        encounterRoomIds,
+      );
+      const trapRoom = placePlaytestTrapRoom(topology, selected.exitRoomId, [
+        ...encounterRoomIds,
+        solidDoor.roomId,
+      ]);
       const dungeon: DungeonRunState = Object.freeze({
         topologyId: selected.topologyId,
         exitRoomId: selected.exitRoomId,
@@ -491,11 +505,11 @@ function transitionFromChoice(
         ),
         events: Object.freeze([
           Object.freeze({
-            ...placePlaytestSolidDoor(
-              getTopology(selected.topologyId),
-              selected.exitRoomId,
-              placement.encounters.map(({ roomId }) => roomId),
-            ),
+            ...solidDoor,
+            status: 'active' as const,
+          }),
+          Object.freeze({
+            ...trapRoom,
             status: 'active' as const,
           }),
         ]),
@@ -690,12 +704,10 @@ function transitionEvent(
     rng,
     choice.resolution.keepHighFor.includes(attempted.heroClass),
   );
-  const destination = result.succeeded
-    ? choice.resolution.success
-    : choice.resolution.failure;
+  const outcome = resolveEventCheckOutcome(choice.resolution, result);
   const transitioned = applyEventDestination(
     attempted,
-    destination,
+    outcome.destination,
     result.rng,
   );
   return {
@@ -708,9 +720,7 @@ function transitionEvent(
         danger: choice.resolution.danger,
         result,
         prompt: choice.resolution.prompt,
-        verdict: result.succeeded
-          ? choice.resolution.successVerdict
-          : choice.resolution.failureVerdict,
+        verdict: outcome.verdict,
       }),
       ...(transitioned.presentations ?? NO_PRESENTATIONS),
     ]),
@@ -734,7 +744,10 @@ function applyEventDestination(
     case 'return-to-map':
       return { phase: returnFromEvent(phase), rng };
     case 'reward': {
-      if (destination.rewardId !== 'solid-door-cache') {
+      if (
+        destination.rewardId !== 'solid-door-cache' &&
+        destination.rewardId !== 'trap-room-cache'
+      ) {
         throw new Error(`Unknown event reward ${destination.rewardId}.`);
       }
       const cache = resolveSolidDoorCache({
@@ -779,8 +792,30 @@ function applyEventDestination(
         rng: cache.rng,
       };
     }
+    case 'injury': {
+      const hp = Math.max(0, phase.stats.hp - destination.damage);
+      if (hp === 0) {
+        return { phase: deathFromEvent(phase, 'TRAPS'), rng };
+      }
+      return {
+        phase: Object.freeze({
+          ...phase,
+          stats: Object.freeze({ ...phase.stats, hp }),
+          screen: Object.freeze({
+            kind: 'reward',
+            heading: getEventDefinition(phase.eventId).heading,
+            copy: Object.freeze([
+              destination.message,
+              `LOSE ${destination.damage} HP`,
+            ]),
+          }),
+        }),
+        rng,
+      };
+    }
+    case 'death':
+      return { phase: deathFromEvent(phase, destination.cause), rng };
     case 'combat':
-    case 'injury':
     case 'clue':
       throw new Error(
         `Event destination ${destination.kind} is not active yet.`,
@@ -1476,6 +1511,22 @@ function deathFromEnemy(
     roomsUntilExit: shortestRoomDistance(
       topology,
       phase.encounterRoomId,
+      phase.dungeon.exitRoomId,
+    ),
+  });
+}
+
+function deathFromEvent(phase: EventPhase, cause: DeathCause): RunPhase {
+  const topology = getTopology(phase.dungeon.topologyId);
+  return Object.freeze({
+    kind: 'death',
+    heroClass: phase.heroClass,
+    cause,
+    roomsFound: phase.dungeon.visitedRoomIds.length,
+    enemiesSlain: phase.enemiesSlain,
+    roomsUntilExit: shortestRoomDistance(
+      topology,
+      phase.dungeon.currentRoomId,
       phase.dungeon.exitRoomId,
     ),
   });

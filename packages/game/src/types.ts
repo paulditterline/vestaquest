@@ -5,8 +5,8 @@ import type { OpposedRoll } from './combat.js';
 import type { EventId } from './events.js';
 import type { Direction, RoomId } from './topology.js';
 
-export const GAME_STATE_VERSION = 6 as const;
-export const GAME_RULES_VERSION = 'dungeon-events-v1' as const;
+export const GAME_STATE_VERSION = 7 as const;
+export const GAME_RULES_VERSION = 'trap-room-v1' as const;
 
 export const HERO_CLASSES = ['warrior', 'rogue', 'wizard'] as const;
 export type HeroClass = (typeof HERO_CLASSES)[number];
@@ -162,10 +162,12 @@ export interface VictoryPhase {
   readonly enemiesSlain: number;
 }
 
+export type DeathCause = 'GHOUL' | 'SKELETON KNIGHT' | 'TRAPS';
+
 export interface DeathPhase {
   readonly kind: 'death';
   readonly heroClass: HeroClass;
-  readonly cause: 'GHOUL' | 'SKELETON KNIGHT';
+  readonly cause: DeathCause;
   readonly roomsFound: number;
   readonly enemiesSlain: number;
   readonly roomsUntilExit: number;
@@ -310,7 +312,7 @@ export interface DeathView extends BaseGameView {
   readonly kind: 'death';
   readonly heroClass: HeroClass;
   readonly heading: 'YOU DIED';
-  readonly cause: 'GHOUL' | 'SKELETON KNIGHT';
+  readonly cause: DeathCause;
   readonly roomsFound: number;
   readonly enemiesSlain: number;
   readonly roomsUntilExit: number;

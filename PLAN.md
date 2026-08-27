@@ -546,9 +546,9 @@ Acceptance:
 
 ### Slice 7 — events and dungeon information
 
-Branch: `codex/dungeon-events`
+Branch: `codex/trap-room-event`
 
-Status: **Active**. The event foundation defines and validates finite authored graphs with one-to-four numbered choices, immediate or visible opposed-check branches, explicit terminal outcomes, truth-tagged transient clues, exact 6x22 event views, controller contracts, and restart-safe presentation intents. The owner approved the first Solid Door on 2026-08-24: Warrior `2D6` keep-high plus Power versus `D6 + DANGER 4`, other classes `D6 + POWER`, ties fail, and one harmless failed attempt per run. Its successful cache uses equal odds among eligible dust, Healing Draught, and missing-slot class-equipment outcomes; a fully stocked hero finds only dust. The complete choice, opposed roll, cache, Equip/Leave, resolution, revisit, and replay path is in the live kernel and passed owner Board Lab review on 2026-08-24, including correct combined level/equipment stats and no retrigger after backtracking. One door remains temporarily staged in an empty off-route-preferred room; this does not settle final event frequency or distribution.
+Status: **Active**. The event foundation defines and validates finite authored graphs with one-to-four numbered choices, immediate or visible opposed-check branches, margin/catastrophe outcomes, explicit terminal outcomes, truth-tagged transient clues, exact 6x22 event views, controller contracts, and restart-safe presentation intents. The approved Solid Door passed owner Board Lab review on 2026-08-24, including its eligible cache, correct combined level/equipment stats, and no retrigger after backtracking. Room of Blades uses `D6 + SKILL` versus `D6 + DANGER 3`; ties fail, ordinary failure deals 1 HP, failure by 3+ deals 2 HP, raw player `1` versus Danger `6` causes instant death, and success opens the shared eligible cache. Its success, cache/equip, combined-stat, persistence, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-08-26 with a Level 3 Rogue and Shadow Knife. One Solid Door and one Trap Room are temporarily staged in distinct empty, off-route-preferred rooms; this does not settle final event frequency or distribution.
 
 Build:
 

@@ -4,10 +4,14 @@ import {
   createEventCheckPresentation,
   createRng,
   HERO_STARTING_STATS,
+  placeCoreEncounters,
   placePlaytestSolidDoor,
+  placePlaytestTrapRoom,
   resolveSolidDoorCache,
+  resolveEventCheckOutcome,
   rollEventCheck,
   SOLID_DOOR_EVENT,
+  TRAP_ROOM_EVENT,
   shortestRoomPath,
   validateEventDefinition,
   type EventDefinition,
@@ -446,10 +450,30 @@ describe('authored dungeon events', () => {
           topology.entranceRoomId,
           exitRoomId,
         );
-        const placement = placePlaytestSolidDoor(topology, exitRoomId, []);
+        const encounters = placeCoreEncounters(
+          topology,
+          exitRoomId,
+          createRng(1),
+        ).encounters;
+        const occupied = encounters.map(({ roomId }) => roomId);
+        const placement = placePlaytestSolidDoor(
+          topology,
+          exitRoomId,
+          occupied,
+        );
+        const trap = placePlaytestTrapRoom(topology, exitRoomId, [
+          ...occupied,
+          placement.roomId,
+        ]);
         expect(placement).toMatchObject({ eventId: 'solid-door' });
+        expect(trap).toMatchObject({ eventId: 'trap-room' });
         expect(placement.roomId).not.toBe(topology.entranceRoomId);
         expect(placement.roomId).not.toBe(exitRoomId);
+        expect(trap.roomId).not.toBe(topology.entranceRoomId);
+        expect(trap.roomId).not.toBe(exitRoomId);
+        expect(trap.roomId).not.toBe(placement.roomId);
+        expect(occupied).not.toContain(placement.roomId);
+        expect(occupied).not.toContain(trap.roomId);
         if (
           topology.rooms.some(
             ({ id }) =>
@@ -462,5 +486,156 @@ describe('authored dungeon events', () => {
         }
       }
     }
+  });
+
+  it('authors the approved one-attempt Room of Blades', () => {
+    expect(() => validateEventDefinition(TRAP_ROOM_EVENT)).not.toThrow();
+    const approach = TRAP_ROOM_EVENT.nodes[0]!;
+    const cross = approach.choices[0];
+    expect(TRAP_ROOM_EVENT).toMatchObject({
+      id: 'trap-room',
+      heading: 'ROOM OF BLADES',
+      startNodeId: 'approach',
+    });
+    expect(approach).toMatchObject({
+      copy: ['A CACHE WAITS BEYOND'],
+      choices: [
+        {
+          id: 'cross',
+          label: 'CROSS',
+          resolvesEvent: true,
+          resolution: {
+            kind: 'opposed-check',
+            stat: 'skill',
+            danger: 3,
+            ties: 'failure',
+            success: { kind: 'reward', rewardId: 'trap-room-cache' },
+            failure: { kind: 'injury', damage: 1 },
+            severeFailure: {
+              minimumMargin: 3,
+              destination: { kind: 'injury', damage: 2 },
+            },
+            catastrophe: {
+              playerDie: 1,
+              dangerDie: 6,
+              destination: { kind: 'death', cause: 'TRAPS' },
+            },
+          },
+        },
+        { id: 'leave', label: 'LEAVE' },
+      ],
+    });
+    expect(cross).toBeDefined();
+  });
+
+  it('keeps the Rogue safest in the Room of Blades', () => {
+    const cross = TRAP_ROOM_EVENT.nodes[0]?.choices[0]?.resolution;
+    if (!cross || cross.kind !== 'opposed-check') {
+      throw new Error('Expected the authored Cross check.');
+    }
+    const attempts = 20_000;
+    const successRate = (heroClass: 'warrior' | 'rogue' | 'wizard') => {
+      let successes = 0;
+      for (let seed = 1; seed <= attempts; seed += 1) {
+        if (
+          rollEventCheck(
+            HERO_STARTING_STATS[heroClass].skill,
+            cross.danger,
+            cross.ties,
+            createRng(seed),
+          ).succeeded
+        ) {
+          successes += 1;
+        }
+      }
+      return successes / attempts;
+    };
+    const rogue = successRate('rogue');
+    const wizard = successRate('wizard');
+    const warrior = successRate('warrior');
+    expect(rogue).toBeGreaterThan(0.69);
+    expect(rogue).toBeLessThan(0.75);
+    expect(wizard).toBeGreaterThan(0.39);
+    expect(wizard).toBeLessThan(0.45);
+    expect(warrior).toBeGreaterThan(0.25);
+    expect(warrior).toBeLessThan(0.31);
+  });
+
+  it('prioritizes the visible trap catastrophe over margin damage', () => {
+    const cross = TRAP_ROOM_EVENT.nodes[0]?.choices[0]?.resolution;
+    if (!cross || cross.kind !== 'opposed-check') {
+      throw new Error('Expected the authored Cross check.');
+    }
+    const result = (input: {
+      playerDie: number;
+      dangerDie: number;
+      playerTotal: number;
+      dangerTotal: number;
+      succeeded: boolean;
+    }) => ({
+      playerDice: [input.playerDie],
+      ...input,
+      rng: createRng(1),
+    });
+    expect(
+      resolveEventCheckOutcome(
+        cross,
+        result({
+          playerDie: 4,
+          dangerDie: 3,
+          playerTotal: 9,
+          dangerTotal: 6,
+          succeeded: true,
+        }),
+      ),
+    ).toMatchObject({
+      verdict: 'YOU CROSS SAFELY',
+      destination: { kind: 'reward', rewardId: 'trap-room-cache' },
+    });
+    expect(
+      resolveEventCheckOutcome(
+        cross,
+        result({
+          playerDie: 3,
+          dangerDie: 5,
+          playerTotal: 6,
+          dangerTotal: 8,
+          succeeded: false,
+        }),
+      ),
+    ).toMatchObject({
+      verdict: 'THE BLADES CUT',
+      destination: { kind: 'injury', damage: 1 },
+    });
+    expect(
+      resolveEventCheckOutcome(
+        cross,
+        result({
+          playerDie: 2,
+          dangerDie: 6,
+          playerTotal: 4,
+          dangerTotal: 9,
+          succeeded: false,
+        }),
+      ),
+    ).toMatchObject({
+      verdict: 'BLADES CUT DEEP',
+      destination: { kind: 'injury', damage: 2 },
+    });
+    expect(
+      resolveEventCheckOutcome(
+        cross,
+        result({
+          playerDie: 1,
+          dangerDie: 6,
+          playerTotal: 3,
+          dangerTotal: 9,
+          succeeded: false,
+        }),
+      ),
+    ).toEqual({
+      verdict: 'THE BLADES TAKE YOU',
+      destination: { kind: 'death', cause: 'TRAPS' },
+    });
   });
 });

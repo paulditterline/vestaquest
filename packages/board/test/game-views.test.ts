@@ -221,6 +221,22 @@ describe('semantic game-view renderers', () => {
       ).toMatchSnapshot();
     }
   });
+
+  it('renders a trap death as a complete board epitaph', () => {
+    const view: GameView = {
+      id: 'trap-death',
+      revision: 8,
+      kind: 'death',
+      heroClass: 'rogue',
+      heading: 'YOU DIED',
+      cause: 'TRAPS',
+      roomsFound: 4,
+      enemiesSlain: 1,
+      roomsUntilExit: 5,
+      choices: [],
+    };
+    expect(snapshotLayout(renderGameView(view, 'black'))).toMatchSnapshot();
+  });
 });
 
 function escapeView(): GameView {
