@@ -43,7 +43,7 @@ function jsonCopy<T>(value: T): T {
 }
 
 function eventRunWithoutInterveningCombat(
-  eventId: 'solid-door' | 'trap-room' = 'solid-door',
+  eventId: 'library' | 'solid-door' | 'trap-room' = 'solid-door',
 ): RunState {
   for (let seed = 1; seed <= 1_000; seed += 1) {
     let state = advance(createRun(seed), `class-${seed}`, CHOICE_IDS.warrior);
@@ -147,6 +147,20 @@ describe('accepted-command replay', () => {
       original = advance(original, 'trap-finish', finalChoice);
     }
     expect(['exploration', 'death']).toContain(original.phase.kind);
+
+    const persisted = jsonCopy(original.acceptedCommands);
+    const replayed = replayRun(original.seed, persisted);
+    expect(replayed).toEqual(original);
+    expect(deriveView(replayed)).toEqual(deriveView(original));
+  });
+
+  it('replays the Library reward or persistent ambush exactly', () => {
+    let original = eventRunWithoutInterveningCombat('library');
+    original = advance(original, 'event-search', 'event.library.search');
+    if (original.phase.kind === 'event') {
+      original = advance(original, 'library-finish', 'event.library.continue');
+    }
+    expect(['exploration', 'combat']).toContain(original.phase.kind);
 
     const persisted = jsonCopy(original.acceptedCommands);
     const replayed = replayRun(original.seed, persisted);

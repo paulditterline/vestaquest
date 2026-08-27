@@ -22,9 +22,11 @@ import { placeCoreEncounters } from './encounters.js';
 import {
   createEventCheckPresentation,
   getEventDefinition,
+  placePlaytestLibrary,
   placePlaytestSolidDoor,
   placePlaytestTrapRoom,
   resolveEventCheckOutcome,
+  resolveLibraryReward,
   resolveSolidDoorCache,
   rollEventCheck,
   type EventDestination,
@@ -487,6 +489,11 @@ function transitionFromChoice(
         ...encounterRoomIds,
         solidDoor.roomId,
       ]);
+      const library = placePlaytestLibrary(topology, selected.exitRoomId, [
+        ...encounterRoomIds,
+        solidDoor.roomId,
+        trapRoom.roomId,
+      ]);
       const dungeon: DungeonRunState = Object.freeze({
         topologyId: selected.topologyId,
         exitRoomId: selected.exitRoomId,
@@ -510,6 +517,10 @@ function transitionFromChoice(
           }),
           Object.freeze({
             ...trapRoom,
+            status: 'active' as const,
+          }),
+          Object.freeze({
+            ...library,
             status: 'active' as const,
           }),
         ]),
@@ -622,7 +633,9 @@ function move(
     (candidate) =>
       candidate.roomId === connection.roomId && candidate.status === 'active',
   );
-  return event ? enterEvent(moved, event.eventId, rng) : { phase: moved, rng };
+  return event
+    ? enterEvent(moved, event.eventId, phase.dungeon.currentRoomId, rng)
+    : { phase: moved, rng };
 }
 
 function useMapItem(phase: ExplorationPhase): ExplorationPhase {
@@ -645,6 +658,7 @@ function useMapItem(phase: ExplorationPhase): ExplorationPhase {
 function enterEvent(
   phase: ExplorationPhase,
   eventId: EventPhase['eventId'],
+  retreatRoomId: string,
   rng: RunState['rng'],
 ): TransitionResult {
   const definition = getEventDefinition(eventId);
@@ -653,6 +667,7 @@ function enterEvent(
       ...phase,
       kind: 'event',
       eventId,
+      retreatRoomId,
       screen: Object.freeze({
         kind: 'node',
         nodeId: definition.startNodeId,
@@ -744,6 +759,45 @@ function applyEventDestination(
     case 'return-to-map':
       return { phase: returnFromEvent(phase), rng };
     case 'reward': {
+      if (destination.rewardId === 'library-search') {
+        const found = resolveLibraryReward({
+          heroClass: phase.heroClass,
+          scrollPouch: phase.scrollPouch,
+          consumable: phase.consumable,
+          rng,
+        });
+        const rewardedPhase =
+          found.reward.kind === 'scroll'
+            ? Object.freeze({
+                ...phase,
+                scrollPouch: Object.freeze([
+                  ...phase.scrollPouch,
+                  found.reward.scroll,
+                ]),
+              })
+            : found.reward.kind === 'healing-draught'
+              ? Object.freeze({
+                  ...phase,
+                  consumable: found.reward.consumable,
+                })
+              : phase;
+        return {
+          phase: Object.freeze({
+            ...rewardedPhase,
+            screen: Object.freeze({
+              kind: 'reward',
+              heading: 'ANCIENT LIBRARY',
+              copy: Object.freeze([
+                found.reward.message,
+                ...(found.reward.kind === 'dead-words'
+                  ? []
+                  : (['TAKEN'] as const)),
+              ]),
+            }),
+          }),
+          rng: found.rng,
+        };
+      }
       if (
         destination.rewardId !== 'solid-door-cache' &&
         destination.rewardId !== 'trap-room-cache'
@@ -815,7 +869,36 @@ function applyEventDestination(
     }
     case 'death':
       return { phase: deathFromEvent(phase, destination.cause), rng };
-    case 'combat':
+    case 'combat': {
+      const roomId = phase.dungeon.currentRoomId;
+      if (
+        phase.dungeon.encounters.some(
+          (encounter) => encounter.roomId === roomId,
+        )
+      ) {
+        throw new Error('Event ambush room already has an encounter.');
+      }
+      const enemy = ENEMIES[destination.enemyId];
+      const dungeon = Object.freeze({
+        ...phase.dungeon,
+        encounters: Object.freeze([
+          ...phase.dungeon.encounters,
+          Object.freeze({
+            roomId,
+            enemyId: destination.enemyId,
+            currentHp: enemy.maximumHp,
+            status: 'active' as const,
+            stealUsed: false,
+          }),
+        ]),
+      });
+      return enterCombat(
+        Object.freeze({ ...returnFromEvent(phase), dungeon }),
+        phase.retreatRoomId,
+        roomId,
+        rng,
+      );
+    }
     case 'clue':
       throw new Error(
         `Event destination ${destination.kind} is not active yet.`,

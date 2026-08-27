@@ -5,8 +5,8 @@ import type { OpposedRoll } from './combat.js';
 import type { EventId } from './events.js';
 import type { Direction, RoomId } from './topology.js';
 
-export const GAME_STATE_VERSION = 7 as const;
-export const GAME_RULES_VERSION = 'trap-room-v1' as const;
+export const GAME_STATE_VERSION = 8 as const;
+export const GAME_RULES_VERSION = 'library-v1' as const;
 
 export const HERO_CLASSES = ['warrior', 'rogue', 'wizard'] as const;
 export type HeroClass = (typeof HERO_CLASSES)[number];
@@ -152,6 +152,7 @@ export interface EventPhase {
   readonly enemiesSlain: number;
   readonly dungeon: DungeonRunState;
   readonly eventId: EventId;
+  readonly retreatRoomId: RoomId;
   readonly screen: EventScreen;
 }
 
