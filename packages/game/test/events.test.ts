@@ -4,9 +4,12 @@ import {
   createEventCheckPresentation,
   createRng,
   HERO_STARTING_STATS,
+  LIBRARY_EVENT,
   placeCoreEncounters,
+  placePlaytestLibrary,
   placePlaytestSolidDoor,
   placePlaytestTrapRoom,
+  resolveLibraryReward,
   resolveSolidDoorCache,
   resolveEventCheckOutcome,
   rollEventCheck,
@@ -465,15 +468,26 @@ describe('authored dungeon events', () => {
           ...occupied,
           placement.roomId,
         ]);
+        const library = placePlaytestLibrary(topology, exitRoomId, [
+          ...occupied,
+          placement.roomId,
+          trap.roomId,
+        ]);
         expect(placement).toMatchObject({ eventId: 'solid-door' });
         expect(trap).toMatchObject({ eventId: 'trap-room' });
+        expect(library).toMatchObject({ eventId: 'library' });
         expect(placement.roomId).not.toBe(topology.entranceRoomId);
         expect(placement.roomId).not.toBe(exitRoomId);
         expect(trap.roomId).not.toBe(topology.entranceRoomId);
         expect(trap.roomId).not.toBe(exitRoomId);
         expect(trap.roomId).not.toBe(placement.roomId);
+        expect(library.roomId).not.toBe(topology.entranceRoomId);
+        expect(library.roomId).not.toBe(exitRoomId);
+        expect(library.roomId).not.toBe(placement.roomId);
+        expect(library.roomId).not.toBe(trap.roomId);
         expect(occupied).not.toContain(placement.roomId);
         expect(occupied).not.toContain(trap.roomId);
+        expect(occupied).not.toContain(library.roomId);
         if (
           topology.rooms.some(
             ({ id }) =>
@@ -486,6 +500,127 @@ describe('authored dungeon events', () => {
         }
       }
     }
+  });
+
+  it('authors the approved one-search Ancient Library', () => {
+    expect(() => validateEventDefinition(LIBRARY_EVENT)).not.toThrow();
+    expect(LIBRARY_EVENT).toMatchObject({
+      id: 'library',
+      heading: 'ANCIENT LIBRARY',
+      startNodeId: 'stacks',
+      nodes: [
+        {
+          copy: ['THE SHELVES WHISPER'],
+          choices: [
+            {
+              id: 'search',
+              label: 'SEARCH',
+              resolvesEvent: true,
+              resolution: {
+                kind: 'opposed-check',
+                stat: 'power',
+                danger: 4,
+                ties: 'failure',
+                keepHighFor: ['wizard'],
+                success: { kind: 'reward', rewardId: 'library-search' },
+                failure: {
+                  kind: 'combat',
+                  enemyId: 'skeleton-knight',
+                },
+              },
+            },
+            { id: 'leave', label: 'LEAVE' },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('makes the Wizard most likely to read the Library runes', () => {
+    const search = LIBRARY_EVENT.nodes[0]?.choices[0]?.resolution;
+    if (!search || search.kind !== 'opposed-check') {
+      throw new Error('Expected the authored Search check.');
+    }
+    const attempts = 20_000;
+    const successRate = (heroClass: 'warrior' | 'rogue' | 'wizard') => {
+      let successes = 0;
+      for (let seed = 1; seed <= attempts; seed += 1) {
+        if (
+          rollEventCheck(
+            HERO_STARTING_STATS[heroClass].power,
+            search.danger,
+            search.ties,
+            createRng(seed),
+            search.keepHighFor.includes(heroClass),
+          ).succeeded
+        ) {
+          successes += 1;
+        }
+      }
+      return successes / attempts;
+    };
+    const wizard = successRate('wizard');
+    const warrior = successRate('warrior');
+    const rogue = successRate('rogue');
+    expect(wizard).toBeGreaterThan(0.72);
+    expect(wizard).toBeLessThan(0.78);
+    expect(warrior).toBeGreaterThan(0.55);
+    expect(warrior).toBeLessThan(0.61);
+    expect(rogue).toBeGreaterThan(0.25);
+    expect(rogue).toBeLessThan(0.31);
+  });
+
+  it('finds Wizard scrolls only when the three-slot pouch has room', () => {
+    const found = resolveLibraryReward({
+      heroClass: 'wizard',
+      scrollPouch: ['fireball', 'lightning'],
+      consumable: 'healing-draught',
+      rng: createRng(1),
+    });
+    expect(found.reward).toMatchObject({ kind: 'scroll' });
+    if (found.reward.kind !== 'scroll') throw new Error('Expected a scroll.');
+    expect(['fireball', 'lightning', 'stun']).toContain(found.reward.scroll);
+    expect(found.reward.message).toBe(
+      `${found.reward.scroll.toUpperCase()} SCROLL`,
+    );
+    expect(found.rng.draws).toBe(1);
+
+    const fullPouch = resolveLibraryReward({
+      heroClass: 'wizard',
+      scrollPouch: ['fireball', 'lightning', 'stun'],
+      consumable: null,
+      rng: createRng(1),
+    });
+    expect(fullPouch.reward).toEqual({
+      kind: 'healing-draught',
+      consumable: 'healing-draught',
+      message: 'HEALING DRAUGHT',
+    });
+    expect(fullPouch.rng.draws).toBe(0);
+  });
+
+  it('gives off-class readers healing or dead words without hidden draws', () => {
+    const healing = resolveLibraryReward({
+      heroClass: 'rogue',
+      scrollPouch: [],
+      consumable: null,
+      rng: createRng(9),
+    });
+    expect(healing.reward).toMatchObject({ kind: 'healing-draught' });
+    expect(healing.rng.draws).toBe(0);
+
+    const deadWords = resolveLibraryReward({
+      heroClass: 'warrior',
+      scrollPouch: [],
+      consumable: 'healing-draught',
+      rng: createRng(9),
+    });
+    expect(deadWords.reward).toEqual({
+      kind: 'dead-words',
+      message: 'ONLY DEAD WORDS REMAIN',
+    });
+    expect(deadWords.reward.message.length).toBeLessThanOrEqual(22);
+    expect(deadWords.rng.draws).toBe(0);
   });
 
   it('authors the approved one-attempt Room of Blades', () => {

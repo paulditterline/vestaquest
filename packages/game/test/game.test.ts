@@ -78,6 +78,7 @@ function solidDoorState(
         currentRoomId: event.roomId,
       }),
       eventId: event.eventId,
+      retreatRoomId: state.phase.dungeon.currentRoomId,
       screen: Object.freeze({ kind: 'node' as const, nodeId: 'approach' }),
     }),
   });
@@ -118,7 +119,48 @@ function trapRoomState(
         currentRoomId: event.roomId,
       }),
       eventId: event.eventId,
+      retreatRoomId: state.phase.dungeon.currentRoomId,
       screen: Object.freeze({ kind: 'node' as const, nodeId: 'approach' }),
+    }),
+  });
+}
+
+function libraryState(
+  rngSeed: number,
+  options: Readonly<{
+    classChoice?: string;
+    consumable?: 'healing-draught' | null;
+    scrollPouch?: readonly ('fireball' | 'lightning' | 'stun')[];
+  }> = {},
+): RunState {
+  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.wizard);
+  if (state.phase.kind !== 'exploration') {
+    throw new Error('Expected exploration fixture.');
+  }
+  const event = state.phase.dungeon.events.find(
+    ({ eventId }) => eventId === 'library',
+  );
+  if (!event) throw new Error('Expected the staged Library.');
+  return Object.freeze({
+    ...state,
+    rng: createRng(rngSeed),
+    phase: Object.freeze({
+      ...state.phase,
+      kind: 'event' as const,
+      consumable:
+        options.consumable === undefined
+          ? state.phase.consumable
+          : options.consumable,
+      scrollPouch: Object.freeze(
+        options.scrollPouch ?? state.phase.scrollPouch,
+      ),
+      dungeon: Object.freeze({
+        ...state.phase.dungeon,
+        currentRoomId: event.roomId,
+      }),
+      eventId: event.eventId,
+      retreatRoomId: state.phase.dungeon.currentRoomId,
+      screen: Object.freeze({ kind: 'node' as const, nodeId: 'stacks' }),
     }),
   });
 }
@@ -983,6 +1025,168 @@ describe('live Solid Door event flow', () => {
       equipped.state.phase.stats.power + equipped.state.phase.stats.defense,
     ).toBe(beforePower + beforeDefense + 1);
     expect(equipped.state.phase.dungeon.events[0]?.status).toBe('resolved');
+  });
+});
+
+describe('live Ancient Library event flow', () => {
+  it('shows Search or Leave and preserves the attempt when leaving', () => {
+    const state = libraryState(1);
+    expect(deriveView(state)).toMatchObject({
+      kind: 'event',
+      heading: 'ANCIENT LIBRARY',
+      copy: ['THE SHELVES WHISPER'],
+      choices: [
+        { id: 'event.library.search', number: 1, label: 'SEARCH' },
+        { id: 'event.library.leave', number: 2, label: 'LEAVE' },
+      ],
+    });
+    const left = choose(state, 'leave-library', 'event.library.leave');
+    expect(left.status).toBe('accepted');
+    if (left.status !== 'accepted' || left.state.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration after leaving.');
+    }
+    expect(
+      left.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'library',
+      )?.status,
+    ).toBe('active');
+  });
+
+  it('adds a random scroll to an open Wizard pouch after a successful search', () => {
+    let success:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        libraryState(seed, {
+          scrollPouch: ['fireball', 'lightning'],
+          consumable: 'healing-draught',
+        }),
+        `search-library-${seed}`,
+        'event.library.search',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'THE RUNES ANSWER'
+      ) {
+        success = result;
+        break;
+      }
+    }
+    expect(success).toBeDefined();
+    if (!success || success.state.phase.kind !== 'event') {
+      throw new Error('Expected a successful Library event.');
+    }
+    expect(success.presentations[0]).toMatchObject({
+      purpose: 'event',
+      prompt: 'SEARCH THE LIBRARY',
+      left: { name: 'WIZARD', diceLabel: '2D6', modifierStat: 'P' },
+      right: {
+        name: 'DANGER',
+        diceLabel: 'D6',
+        modifierStat: 'X',
+        modifier: 4,
+      },
+      verdict: 'THE RUNES ANSWER',
+    });
+    expect(success.state.phase.scrollPouch).toHaveLength(3);
+    expect(success.state.phase.screen).toMatchObject({
+      kind: 'reward',
+      heading: 'ANCIENT LIBRARY',
+      copy: [
+        expect.stringMatching(/^(FIREBALL|LIGHTNING|STUN) SCROLL$/),
+        'TAKEN',
+      ],
+    });
+    expect(
+      success.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'library',
+      )?.status,
+    ).toBe('resolved');
+  });
+
+  it('gives an off-class hero a draught when the consumable slot is open', () => {
+    let success:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        libraryState(seed, {
+          classChoice: CHOICE_IDS.warrior,
+          consumable: null,
+        }),
+        `read-battle-lore-${seed}`,
+        'event.library.search',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'THE RUNES ANSWER'
+      ) {
+        success = result;
+        break;
+      }
+    }
+    expect(success?.state.phase).toMatchObject({
+      kind: 'event',
+      consumable: 'healing-draught',
+      screen: {
+        kind: 'reward',
+        heading: 'ANCIENT LIBRARY',
+        copy: ['HEALING DRAUGHT', 'TAKEN'],
+      },
+    });
+  });
+
+  it('turns a failed search into a persistent Skeleton Knight ambush', () => {
+    let failure:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        libraryState(seed, { classChoice: CHOICE_IDS.rogue }),
+        `wake-shelves-${seed}`,
+        'event.library.search',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'THE SHELVES AWAKEN'
+      ) {
+        failure = result;
+        break;
+      }
+    }
+    expect(failure).toBeDefined();
+    if (!failure || failure.state.phase.kind !== 'combat') {
+      throw new Error('Expected Library ambush combat.');
+    }
+    expect(failure.presentations[0]).toMatchObject({
+      purpose: 'event',
+      verdict: 'THE SHELVES AWAKEN',
+    });
+    expect(failure.presentations[1]).toMatchObject({
+      purpose: 'initiative',
+      right: { name: 'SKELETON KNIGHT' },
+    });
+    expect(typeof failure.state.phase.retreatRoomId).toBe('string');
+    expect(
+      failure.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'library',
+      )?.status,
+    ).toBe('resolved');
+    const encounterRoomId = failure.state.phase.encounterRoomId;
+    expect(
+      failure.state.phase.dungeon.encounters.find(
+        ({ roomId }) => roomId === encounterRoomId,
+      ),
+    ).toMatchObject({
+      enemyId: 'skeleton-knight',
+      currentHp: 3,
+      status: 'active',
+    });
+    expect(deriveView(failure.state)).toMatchObject({
+      kind: 'combat',
+      enemyId: 'skeleton-knight',
+    });
   });
 });
 

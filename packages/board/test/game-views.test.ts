@@ -69,6 +69,23 @@ describe('semantic game-view renderers', () => {
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 
+  it('renders the Ancient Library search choice across the room', () => {
+    const view: GameView = {
+      id: 'library-review',
+      revision: 6,
+      kind: 'event',
+      heading: 'ANCIENT LIBRARY',
+      copy: ['THE SHELVES WHISPER'],
+      choices: [
+        { id: 'event.library.search', number: 1, label: 'SEARCH' },
+        { id: 'event.library.leave', number: 2, label: 'LEAVE' },
+      ],
+    };
+    const layout = renderGameView(view, 'black');
+    expect(isFlagshipLayout(layout)).toBe(true);
+    expect(snapshotLayout(layout)).toMatchSnapshot();
+  });
+
   it('renders the live combat menu with both HP bars and legal actions', () => {
     let state = choose(createRun(10), CHOICE_IDS.warrior, 'select-warrior');
     state = choose(state, CHOICE_IDS.north, 'north');

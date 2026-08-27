@@ -2,14 +2,16 @@ import { CLASS_EQUIPMENT, EQUIPMENT, type EnemyId } from './balance.js';
 import { shortestRoomPath } from './encounters.js';
 import { rollDie, type RngState } from './rng.js';
 import type { DungeonTopology, RoomId } from './topology.js';
-import type {
-  Equipment,
-  EquipmentItemId,
-  EquipmentItemName,
-  DeathCause,
-  HeroClass,
-  OpposedRollPresentation,
-  RollStat,
+import {
+  SCROLL_IDS,
+  type DeathCause,
+  type Equipment,
+  type EquipmentItemId,
+  type EquipmentItemName,
+  type HeroClass,
+  type OpposedRollPresentation,
+  type RollStat,
+  type ScrollId,
 } from './types.js';
 
 export const EVENT_IDS = [
@@ -128,6 +130,27 @@ export type SolidDoorCacheReward =
 
 export type SolidDoorCacheResult = Readonly<{
   reward: SolidDoorCacheReward;
+  rng: RngState;
+}>;
+
+export type LibraryReward =
+  | Readonly<{
+      kind: 'scroll';
+      scroll: ScrollId;
+      message: `${Uppercase<ScrollId>} SCROLL`;
+    }>
+  | Readonly<{
+      kind: 'healing-draught';
+      consumable: 'healing-draught';
+      message: 'HEALING DRAUGHT';
+    }>
+  | Readonly<{
+      kind: 'dead-words';
+      message: 'ONLY DEAD WORDS REMAIN';
+    }>;
+
+export type LibraryRewardResult = Readonly<{
+  reward: LibraryReward;
   rng: RngState;
 }>;
 
@@ -300,6 +323,101 @@ export function resolveSolidDoorCache(input: {
   });
 }
 
+export function resolveLibraryReward(input: {
+  heroClass: HeroClass;
+  scrollPouch: readonly ScrollId[];
+  consumable: 'healing-draught' | null;
+  rng: RngState;
+}): LibraryRewardResult {
+  if (input.heroClass === 'wizard' && input.scrollPouch.length < 3) {
+    const rolled = rollDie(input.rng, SCROLL_IDS.length);
+    const scroll = SCROLL_IDS[rolled.value - 1]!;
+    return Object.freeze({
+      reward: Object.freeze({
+        kind: 'scroll' as const,
+        scroll,
+        message: libraryScrollMessage(scroll),
+      }),
+      rng: rolled.state,
+    });
+  }
+  if (input.consumable === null) {
+    return Object.freeze({
+      reward: Object.freeze({
+        kind: 'healing-draught' as const,
+        consumable: 'healing-draught' as const,
+        message: 'HEALING DRAUGHT' as const,
+      }),
+      rng: input.rng,
+    });
+  }
+  return Object.freeze({
+    reward: Object.freeze({
+      kind: 'dead-words' as const,
+      message: 'ONLY DEAD WORDS REMAIN' as const,
+    }),
+    rng: input.rng,
+  });
+}
+
+function libraryScrollMessage(
+  scroll: ScrollId,
+): 'FIREBALL SCROLL' | 'LIGHTNING SCROLL' | 'STUN SCROLL' {
+  switch (scroll) {
+    case 'fireball':
+      return 'FIREBALL SCROLL';
+    case 'lightning':
+      return 'LIGHTNING SCROLL';
+    case 'stun':
+      return 'STUN SCROLL';
+  }
+}
+
+export const LIBRARY_EVENT: EventDefinition = Object.freeze({
+  id: 'library',
+  heading: 'ANCIENT LIBRARY',
+  startNodeId: 'stacks',
+  nodes: Object.freeze([
+    Object.freeze({
+      id: 'stacks',
+      copy: Object.freeze(['THE SHELVES WHISPER']),
+      choices: Object.freeze([
+        Object.freeze({
+          id: 'search',
+          label: 'SEARCH',
+          resolvesEvent: true,
+          resolution: Object.freeze({
+            kind: 'opposed-check',
+            stat: 'power',
+            danger: 4,
+            ties: 'failure',
+            keepHighFor: Object.freeze(['wizard'] as const),
+            prompt: 'SEARCH THE LIBRARY',
+            successVerdict: 'THE RUNES ANSWER',
+            failureVerdict: 'THE SHELVES AWAKEN',
+            success: Object.freeze({
+              kind: 'reward',
+              rewardId: 'library-search',
+            }),
+            failure: Object.freeze({
+              kind: 'combat',
+              enemyId: 'skeleton-knight',
+            }),
+          }),
+        }),
+        Object.freeze({
+          id: 'leave',
+          label: 'LEAVE',
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({ kind: 'return-to-map' }),
+          }),
+        }),
+      ]),
+    }),
+  ]),
+});
+
 export const SOLID_DOOR_EVENT: EventDefinition = Object.freeze({
   id: 'solid-door',
   heading: 'SOLID DOOR',
@@ -418,6 +536,7 @@ export const TRAP_ROOM_EVENT: EventDefinition = Object.freeze({
 });
 
 export const AUTHORED_EVENTS: readonly EventDefinition[] = Object.freeze([
+  LIBRARY_EVENT,
   SOLID_DOOR_EVENT,
   TRAP_ROOM_EVENT,
 ]);
@@ -454,11 +573,19 @@ export function placePlaytestTrapRoom(
   return placePlaytestEvent(topology, exitRoomId, occupiedRoomIds, 'trap-room');
 }
 
+export function placePlaytestLibrary(
+  topology: DungeonTopology,
+  exitRoomId: RoomId,
+  occupiedRoomIds: readonly RoomId[],
+): PlacedEvent {
+  return placePlaytestEvent(topology, exitRoomId, occupiedRoomIds, 'library');
+}
+
 function placePlaytestEvent(
   topology: DungeonTopology,
   exitRoomId: RoomId,
   occupiedRoomIds: readonly RoomId[],
-  eventId: 'solid-door' | 'trap-room',
+  eventId: 'library' | 'solid-door' | 'trap-room',
 ): PlacedEvent {
   const unavailable = new Set<RoomId>([
     topology.entranceRoomId,
