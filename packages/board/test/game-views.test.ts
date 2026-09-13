@@ -224,6 +224,37 @@ describe('semantic game-view renderers', () => {
     ).toMatchSnapshot();
   });
 
+  it('renders a neutral prisoner check without fake modifiers', () => {
+    const presentation: GamePresentation = {
+      kind: 'opposed-roll',
+      purpose: 'event',
+      prompt: 'BREAK THE CHAINS',
+      left: {
+        name: 'WARRIOR',
+        diceLabel: '2D6',
+        dice: [5, 3],
+        modifierStat: 'NONE',
+        modifier: 0,
+        total: 5,
+      },
+      right: {
+        name: 'DANGER',
+        diceLabel: 'D6',
+        dice: [4],
+        modifierStat: 'NONE',
+        modifier: 0,
+        total: 4,
+      },
+      verdict: 'THE CHAINS BREAK',
+    };
+    const scaffold = snapshotLayout(renderOpposedRollScaffold(presentation));
+    const result = snapshotLayout(renderOpposedRollResult(presentation));
+    expect(scaffold).not.toContain('+0');
+    expect(result).not.toContain('+0');
+    expect(scaffold).toMatchSnapshot();
+    expect(result).toMatchSnapshot();
+  });
+
   it('renders a healing result before the enemy response', () => {
     const presentation = {
       kind: 'combat-notice',
@@ -250,6 +281,22 @@ describe('semantic game-view renderers', () => {
       roomsFound: 4,
       enemiesSlain: 1,
       roomsUntilExit: 5,
+      choices: [],
+    };
+    expect(snapshotLayout(renderGameView(view, 'black'))).toMatchSnapshot();
+  });
+
+  it('renders death by the chains as a complete board epitaph', () => {
+    const view: GameView = {
+      id: 'chain-death',
+      revision: 9,
+      kind: 'death',
+      heroClass: 'warrior',
+      heading: 'YOU DIED',
+      cause: 'THE CHAINS',
+      roomsFound: 5,
+      enemiesSlain: 1,
+      roomsUntilExit: 4,
       choices: [],
     };
     expect(snapshotLayout(renderGameView(view, 'black'))).toMatchSnapshot();

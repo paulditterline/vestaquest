@@ -43,7 +43,8 @@ function jsonCopy<T>(value: T): T {
 }
 
 function eventRunWithoutInterveningCombat(
-  eventId: 'library' | 'solid-door' | 'trap-room' = 'solid-door',
+  eventId:
+    'chained-victim' | 'library' | 'solid-door' | 'trap-room' = 'solid-door',
 ): RunState {
   for (let seed = 1; seed <= 1_000; seed += 1) {
     let state = advance(createRun(seed), `class-${seed}`, CHOICE_IDS.warrior);
@@ -161,6 +162,29 @@ describe('accepted-command replay', () => {
       original = advance(original, 'library-finish', 'event.library.continue');
     }
     expect(['exploration', 'combat']).toContain(original.phase.kind);
+
+    const persisted = jsonCopy(original.acceptedCommands);
+    const replayed = replayRun(original.seed, persisted);
+    expect(replayed).toEqual(original);
+    expect(deriveView(replayed)).toEqual(deriveView(original));
+  });
+
+  it('replays a neutral prisoner roll and its transient outcome exactly', () => {
+    let original = eventRunWithoutInterveningCombat('chained-victim');
+    original = advance(
+      original,
+      'event-question',
+      'event.chained-victim.question',
+    );
+    if (original.phase.kind !== 'event') {
+      throw new Error('Question should remain on an event result screen.');
+    }
+    const finalChoice =
+      original.phase.screen.kind === 'node'
+        ? 'event.chained-victim.leave'
+        : 'event.chained-victim.continue';
+    original = advance(original, 'prisoner-finish', finalChoice);
+    expect(original.phase.kind).toBe('exploration');
 
     const persisted = jsonCopy(original.acceptedCommands);
     const replayed = replayRun(original.seed, persisted);

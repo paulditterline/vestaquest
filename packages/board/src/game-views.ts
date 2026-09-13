@@ -421,6 +421,9 @@ function writeRollName(
           : side.modifierStat === 'L'
             ? 'LUCK'
             : '';
+  if (side.modifierStat === 'NONE') {
+    return writeText(layout, name, { row, column: 0 });
+  }
   return writeText(
     layout,
     `${name}${stat ? ` ${stat}` : ''} ${side.modifier}`,
@@ -447,7 +450,13 @@ function writeRollResult(
     })),
   );
   const raw = side.dice.join('/');
-  next = writeText(next, `${raw}+${side.modifier}=${side.total}`, {
+  const result =
+    side.modifierStat === 'NONE'
+      ? side.dice.length === 2
+        ? `${raw}=${side.total}`
+        : raw
+      : `${raw}+${side.modifier}=${side.total}`;
+  next = writeText(next, result, {
     row,
     column: resultStart,
   });
