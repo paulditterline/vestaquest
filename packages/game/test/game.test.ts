@@ -204,6 +204,52 @@ function chainedPrisonerState(
   });
 }
 
+function strangeHoleState(
+  rngSeed: number,
+  options: Readonly<{
+    classChoice?: string;
+    hp?: number;
+    consumable?: 'healing-draught' | null;
+    equipment?: Readonly<{
+      weapon: 'iron-sword' | 'shadow-knife' | 'ash-wand' | null;
+      armor: 'chain-mail' | 'night-cloak' | 'rune-robe' | null;
+    }>;
+  }> = {},
+): RunState {
+  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.rogue);
+  if (state.phase.kind !== 'exploration') {
+    throw new Error('Expected exploration fixture.');
+  }
+  const event = state.phase.dungeon.events.find(
+    ({ eventId }) => eventId === 'strange-hole',
+  );
+  if (!event) throw new Error('Expected the staged Strange Hole.');
+  return Object.freeze({
+    ...state,
+    rng: createRng(rngSeed),
+    phase: Object.freeze({
+      ...state.phase,
+      kind: 'event' as const,
+      stats: Object.freeze({
+        ...state.phase.stats,
+        hp: options.hp ?? state.phase.stats.hp,
+      }),
+      consumable:
+        options.consumable === undefined
+          ? state.phase.consumable
+          : options.consumable,
+      equipment: options.equipment ?? state.phase.equipment,
+      dungeon: Object.freeze({
+        ...state.phase.dungeon,
+        currentRoomId: event.roomId,
+      }),
+      eventId: event.eventId,
+      retreatRoomId: state.phase.dungeon.currentRoomId,
+      screen: Object.freeze({ kind: 'node' as const, nodeId: 'edge' }),
+    }),
+  });
+}
+
 function escapeCrookedHalls(seed = 10): RunState {
   let state = beginExploration(seed);
   for (const choiceId of [
@@ -1420,6 +1466,218 @@ describe('live Chained Prisoner event flow', () => {
     expect(fatal.state.phase).toMatchObject({
       kind: 'death',
       cause: 'THE CHAINS',
+    });
+  });
+});
+
+describe('live Strange Hole event flow', () => {
+  it('shows Look, Reach, or Leave and preserves the encounter when leaving', () => {
+    const state = strangeHoleState(1);
+    expect(deriveView(state)).toMatchObject({
+      kind: 'event',
+      heading: 'STRANGE HOLE',
+      copy: ['COLD AIR RISES'],
+      choices: [
+        { id: 'event.strange-hole.look', number: 1, label: 'LOOK' },
+        { id: 'event.strange-hole.reach', number: 2, label: 'REACH' },
+        { id: 'event.strange-hole.leave', number: 3, label: 'LEAVE' },
+      ],
+    });
+    const left = choose(state, 'leave-hole', 'event.strange-hole.leave');
+    expect(left.status).toBe('accepted');
+    if (left.status !== 'accepted' || left.state.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration after leaving.');
+    }
+    expect(
+      left.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'strange-hole',
+      )?.status,
+    ).toBe('active');
+    expect(left.state.rng.draws).toBe(0);
+  });
+
+  it('reveals a truthful shortest-path direction after Look succeeds', () => {
+    let success:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        strangeHoleState(seed),
+        `look-hole-${seed}`,
+        'event.strange-hole.look',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'THE DRAFT ANSWERS'
+      ) {
+        success = result;
+        break;
+      }
+    }
+    expect(success).toBeDefined();
+    if (!success || success.state.phase.kind !== 'event') {
+      throw new Error('Expected a successful Look event.');
+    }
+    expect(success.presentations[0]).toMatchObject({
+      purpose: 'event',
+      prompt: 'LOOK INTO THE HOLE',
+      left: { name: 'ROGUE', modifierStat: 'L', modifier: 5 },
+      right: { name: 'DANGER', modifierStat: 'X', modifier: 3 },
+      verdict: 'THE DRAFT ANSWERS',
+    });
+    expect(success.state.phase.screen).toMatchObject({
+      kind: 'reward',
+      heading: 'THE COLD AIR POINTS',
+      copy: [expect.stringMatching(/^GO (NORTH|EAST|SOUTH|WEST) FROM HERE$/)],
+    });
+    if (success.state.phase.screen.kind !== 'reward') {
+      throw new Error('Expected the transient air clue.');
+    }
+    const clueDirection = success.state.phase.screen.copy[0]!.split(' ')[1]!.at(
+      0,
+    ) as 'N' | 'E' | 'S' | 'W';
+    const topology = getTopology(success.state.phase.dungeon.topologyId);
+    const currentRoomId = success.state.phase.dungeon.currentRoomId;
+    const connection = getRoom(topology, currentRoomId).connections[
+      clueDirection
+    ];
+    expect(connection?.kind).toBe('room');
+    if (connection?.kind !== 'room') throw new Error('Expected a real path.');
+    expect(
+      shortestRoomDistance(
+        topology,
+        connection.roomId,
+        success.state.phase.dungeon.exitRoomId,
+      ),
+    ).toBe(
+      shortestRoomDistance(
+        topology,
+        currentRoomId,
+        success.state.phase.dungeon.exitRoomId,
+      ) - 1,
+    );
+  });
+
+  it('makes a failed Look harmless and resolves the event', () => {
+    let failure:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        strangeHoleState(seed, { classChoice: CHOICE_IDS.warrior }),
+        `dark-hole-${seed}`,
+        'event.strange-hole.look',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'ONLY DARKNESS'
+      ) {
+        failure = result;
+        break;
+      }
+    }
+    expect(failure?.state.phase).toMatchObject({
+      kind: 'event',
+      stats: { hp: 5 },
+      screen: { kind: 'node', nodeId: 'darkness' },
+    });
+    if (!failure) throw new Error('Expected a failed Look attempt.');
+    expect(
+      failure.state.phase.kind === 'event'
+        ? failure.state.phase.dungeon.events.find(
+            ({ eventId }) => eventId === 'strange-hole',
+          )?.status
+        : undefined,
+    ).toBe('resolved');
+    expect(deriveView(failure.state)).toMatchObject({
+      heading: 'STRANGE HOLE',
+      copy: ['ONLY DARKNESS'],
+      choices: [{ label: 'LEAVE' }],
+    });
+  });
+
+  it('opens the shared cache after Reach succeeds', () => {
+    let success:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        strangeHoleState(seed, {
+          consumable: 'healing-draught',
+          equipment: { weapon: 'shadow-knife', armor: 'night-cloak' },
+        }),
+        `reach-hole-${seed}`,
+        'event.strange-hole.reach',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'YOU FIND A CACHE'
+      ) {
+        success = result;
+        break;
+      }
+    }
+    expect(success?.presentations[0]).toMatchObject({
+      prompt: 'REACH INTO THE HOLE',
+      left: { name: 'ROGUE', modifierStat: 'S', modifier: 5 },
+      right: { name: 'DANGER', modifierStat: 'X', modifier: 4 },
+      verdict: 'YOU FIND A CACHE',
+    });
+    expect(success?.state.phase).toMatchObject({
+      kind: 'event',
+      screen: {
+        kind: 'reward',
+        heading: 'HIDDEN CACHE',
+        copy: ['ONLY DUST REMAINS'],
+      },
+    });
+  });
+
+  it('lets a failed Reach wound or kill the hero with the authored cause', () => {
+    let wound:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    let woundSeed: number | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        strangeHoleState(seed, { classChoice: CHOICE_IDS.warrior }),
+        `dark-bites-${seed}`,
+        'event.strange-hole.reach',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'THE DARK BITES'
+      ) {
+        wound = result;
+        woundSeed = seed;
+        break;
+      }
+    }
+    expect(wound?.state.phase).toMatchObject({
+      kind: 'event',
+      stats: { hp: 4 },
+      screen: {
+        kind: 'reward',
+        heading: 'STRANGE HOLE',
+        copy: ['THE DARK BITES', 'LOSE 1 HP'],
+      },
+    });
+    if (!wound || woundSeed === undefined) {
+      throw new Error('Expected a failed Reach attempt.');
+    }
+    const fatal = choose(
+      strangeHoleState(woundSeed, {
+        classChoice: CHOICE_IDS.warrior,
+        hp: 1,
+      }),
+      'fatal-dark',
+      'event.strange-hole.reach',
+    );
+    expect(fatal.status).toBe('accepted');
+    if (fatal.status !== 'accepted') throw new Error(fatal.reason);
+    expect(fatal.state.phase).toMatchObject({
+      kind: 'death',
+      cause: 'THE DARK',
     });
   });
 });

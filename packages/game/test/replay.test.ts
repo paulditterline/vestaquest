@@ -44,7 +44,11 @@ function jsonCopy<T>(value: T): T {
 
 function eventRunWithoutInterveningCombat(
   eventId:
-    'chained-victim' | 'library' | 'solid-door' | 'trap-room' = 'solid-door',
+    | 'chained-victim'
+    | 'library'
+    | 'solid-door'
+    | 'strange-hole'
+    | 'trap-room' = 'solid-door',
 ): RunState {
   for (let seed = 1; seed <= 1_000; seed += 1) {
     let state = advance(createRun(seed), `class-${seed}`, CHOICE_IDS.warrior);
@@ -184,6 +188,25 @@ describe('accepted-command replay', () => {
         ? 'event.chained-victim.leave'
         : 'event.chained-victim.continue';
     original = advance(original, 'prisoner-finish', finalChoice);
+    expect(original.phase.kind).toBe('exploration');
+
+    const persisted = jsonCopy(original.acceptedCommands);
+    const replayed = replayRun(original.seed, persisted);
+    expect(replayed).toEqual(original);
+    expect(deriveView(replayed)).toEqual(deriveView(original));
+  });
+
+  it('replays a Strange Hole check and its terminal outcome exactly', () => {
+    let original = eventRunWithoutInterveningCombat('strange-hole');
+    original = advance(original, 'event-look', 'event.strange-hole.look');
+    if (original.phase.kind !== 'event') {
+      throw new Error('Look should remain on an event result screen.');
+    }
+    const finalChoice =
+      original.phase.screen.kind === 'node'
+        ? 'event.strange-hole.leave'
+        : 'event.strange-hole.continue';
+    original = advance(original, 'hole-finish', finalChoice);
     expect(original.phase.kind).toBe('exploration');
 
     const persisted = jsonCopy(original.acceptedCommands);

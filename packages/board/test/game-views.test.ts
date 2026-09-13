@@ -86,6 +86,24 @@ describe('semantic game-view renderers', () => {
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 
+  it('renders the Strange Hole choice without controller overflow', () => {
+    const view: GameView = {
+      id: 'strange-hole-review',
+      revision: 7,
+      kind: 'event',
+      heading: 'STRANGE HOLE',
+      copy: ['COLD AIR RISES'],
+      choices: [
+        { id: 'event.strange-hole.look', number: 1, label: 'LOOK' },
+        { id: 'event.strange-hole.reach', number: 2, label: 'REACH' },
+        { id: 'event.strange-hole.leave', number: 3, label: 'LEAVE' },
+      ],
+    };
+    const layout = renderGameView(view, 'black');
+    expect(isFlagshipLayout(layout)).toBe(true);
+    expect(snapshotLayout(layout)).toMatchSnapshot();
+  });
+
   it('renders the live combat menu with both HP bars and legal actions', () => {
     let state = choose(createRun(10), CHOICE_IDS.warrior, 'select-warrior');
     state = choose(state, CHOICE_IDS.north, 'north');

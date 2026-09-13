@@ -213,12 +213,12 @@ describe('SqliteSessionRepository', () => {
         payload: {
           kind: 'game-view',
           view: {
-            id: 'chain-death',
+            id: 'dark-death',
             revision: 0,
             kind: 'death',
             heroClass: 'rogue',
             heading: 'YOU DIED',
-            cause: 'THE CHAINS',
+            cause: 'THE DARK',
             roomsFound: 4,
             enemiesSlain: 1,
             roomsUntilExit: 5,
@@ -246,7 +246,7 @@ describe('SqliteSessionRepository', () => {
       {
         payload: {
           kind: 'game-view',
-          view: { kind: 'death', cause: 'THE CHAINS' },
+          view: { kind: 'death', cause: 'THE DARK' },
         },
       },
     ]);

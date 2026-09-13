@@ -25,6 +25,7 @@ import {
   placePlaytestChainedPrisoner,
   placePlaytestLibrary,
   placePlaytestSolidDoor,
+  placePlaytestStrangeHole,
   placePlaytestTrapRoom,
   resolveEventCheckOutcome,
   resolveLibraryReward,
@@ -505,6 +506,17 @@ function transitionFromChoice(
           library.roomId,
         ],
       );
+      const strangeHole = placePlaytestStrangeHole(
+        topology,
+        selected.exitRoomId,
+        [
+          ...encounterRoomIds,
+          solidDoor.roomId,
+          trapRoom.roomId,
+          library.roomId,
+          chainedPrisoner.roomId,
+        ],
+      );
       const dungeon: DungeonRunState = Object.freeze({
         topologyId: selected.topologyId,
         exitRoomId: selected.exitRoomId,
@@ -536,6 +548,10 @@ function transitionFromChoice(
           }),
           Object.freeze({
             ...chainedPrisoner,
+            status: 'active' as const,
+          }),
+          Object.freeze({
+            ...strangeHole,
             status: 'active' as const,
           }),
         ]),
@@ -818,6 +834,7 @@ function applyEventDestination(
       }
       if (
         destination.rewardId !== 'solid-door-cache' &&
+        destination.rewardId !== 'strange-hole-cache' &&
         destination.rewardId !== 'trap-room-cache'
       ) {
         throw new Error(`Unknown event reward ${destination.rewardId}.`);
@@ -933,13 +950,26 @@ function applyEventDestination(
           ...phase,
           screen: Object.freeze({
             kind: 'reward',
-            heading: 'THE PRISONER WHISPERS',
+            heading: truthfulClueHeading(phase.eventId),
             copy: Object.freeze([`GO ${directionName(direction)} FROM HERE`]),
           }),
         }),
         rng,
       };
     }
+  }
+}
+
+function truthfulClueHeading(
+  eventId: EventPhase['eventId'],
+): 'THE PRISONER WHISPERS' | 'THE COLD AIR POINTS' {
+  switch (eventId) {
+    case 'chained-victim':
+      return 'THE PRISONER WHISPERS';
+    case 'strange-hole':
+      return 'THE COLD AIR POINTS';
+    default:
+      throw new Error(`Event ${eventId} has no truthful clue presentation.`);
   }
 }
 
