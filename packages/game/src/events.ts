@@ -623,10 +623,93 @@ export const CHAINED_PRISONER_EVENT: EventDefinition = Object.freeze({
   ]),
 });
 
+export const STRANGE_HOLE_EVENT: EventDefinition = Object.freeze({
+  id: 'strange-hole',
+  heading: 'STRANGE HOLE',
+  startNodeId: 'edge',
+  nodes: Object.freeze([
+    Object.freeze({
+      id: 'edge',
+      copy: Object.freeze(['COLD AIR RISES']),
+      choices: Object.freeze([
+        Object.freeze({
+          id: 'look',
+          label: 'LOOK',
+          resolvesEvent: true,
+          resolution: Object.freeze({
+            kind: 'opposed-check',
+            stat: 'luck',
+            danger: 3,
+            ties: 'success',
+            keepHighFor: Object.freeze([]),
+            prompt: 'LOOK INTO THE HOLE',
+            successVerdict: 'THE DRAFT ANSWERS',
+            failureVerdict: 'ONLY DARKNESS',
+            success: Object.freeze({
+              kind: 'clue',
+              clueId: 'exit-first-step',
+              reliability: 'truthful',
+            }),
+            failure: Object.freeze({ kind: 'node', nodeId: 'darkness' }),
+          }),
+        }),
+        Object.freeze({
+          id: 'reach',
+          label: 'REACH',
+          resolvesEvent: true,
+          resolution: Object.freeze({
+            kind: 'opposed-check',
+            stat: 'skill',
+            danger: 4,
+            ties: 'failure',
+            keepHighFor: Object.freeze([]),
+            prompt: 'REACH INTO THE HOLE',
+            successVerdict: 'YOU FIND A CACHE',
+            failureVerdict: 'THE DARK BITES',
+            success: Object.freeze({
+              kind: 'reward',
+              rewardId: 'strange-hole-cache',
+            }),
+            failure: Object.freeze({
+              kind: 'injury',
+              damage: 1,
+              message: 'THE DARK BITES',
+              deathCause: 'THE DARK',
+            }),
+          }),
+        }),
+        Object.freeze({
+          id: 'leave',
+          label: 'LEAVE',
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({ kind: 'return-to-map' }),
+          }),
+        }),
+      ]),
+    }),
+    Object.freeze({
+      id: 'darkness',
+      copy: Object.freeze(['ONLY DARKNESS']),
+      choices: Object.freeze([
+        Object.freeze({
+          id: 'leave',
+          label: 'LEAVE',
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({ kind: 'return-to-map' }),
+          }),
+        }),
+      ]),
+    }),
+  ]),
+});
+
 export const AUTHORED_EVENTS: readonly EventDefinition[] = Object.freeze([
   CHAINED_PRISONER_EVENT,
   LIBRARY_EVENT,
   SOLID_DOOR_EVENT,
+  STRANGE_HOLE_EVENT,
   TRAP_ROOM_EVENT,
 ]);
 
@@ -683,11 +766,25 @@ export function placePlaytestChainedPrisoner(
   );
 }
 
+export function placePlaytestStrangeHole(
+  topology: DungeonTopology,
+  exitRoomId: RoomId,
+  occupiedRoomIds: readonly RoomId[],
+): PlacedEvent {
+  return placePlaytestEvent(
+    topology,
+    exitRoomId,
+    occupiedRoomIds,
+    'strange-hole',
+  );
+}
+
 function placePlaytestEvent(
   topology: DungeonTopology,
   exitRoomId: RoomId,
   occupiedRoomIds: readonly RoomId[],
-  eventId: 'chained-victim' | 'library' | 'solid-door' | 'trap-room',
+  eventId:
+    'chained-victim' | 'library' | 'solid-door' | 'strange-hole' | 'trap-room',
 ): PlacedEvent {
   const unavailable = new Set<RoomId>([
     topology.entranceRoomId,

@@ -1,8 +1,8 @@
 # VestaQuest implementation plan
 
-Status: Slices 0–5 complete and merged; Slice 6 active
+Status: Slices 0–5 complete and merged; Slices 6–7 active
 
-Last updated: 2026-08-11
+Last updated: 2026-09-13
 
 Target hardware: Vestaboard Flagship, 6 rows by 22 columns
 
@@ -546,9 +546,9 @@ Acceptance:
 
 ### Slice 7 — events and dungeon information
 
-Branch: `codex/chained-prisoner-event`
+Branch: `codex/strange-hole-event`
 
-Status: **Active**. The event foundation defines and validates finite authored graphs with one-to-four numbered choices, immediate or visible opposed-check branches, margin/catastrophe outcomes, explicit terminal outcomes, truth-tagged transient clues, exact 6x22 event views, controller contracts, and restart-safe presentation intents. The approved Solid Door passed owner Board Lab review on 2026-08-24, including its eligible cache, correct combined level/equipment stats, and no retrigger after backtracking. Room of Blades uses `D6 + SKILL` versus `D6 + DANGER 3`; ties fail, ordinary failure deals 1 HP, failure by 3+ deals 2 HP, raw player `1` versus Danger `6` causes instant death, and success opens the shared eligible cache. Its success, cache/equip, combined-stat, persistence, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-08-26 with a Level 3 Rogue and Shadow Knife. Ancient Library uses Wizard keep-high `POWER` versus `DANGER 4`, scroll/healing/dead-words success rewards, and a persistent Skeleton Knight ambush on failure. Its Wizard success, replacement-scroll, persistence, combined-stat, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-08-26; the ambush branch remains automated-test verified. Chained Prisoner uses class-neutral raw opposed rolls: Free is `2D6` keep-high versus `D6`, ties succeeding, with a 1 HP chain wound on failure; Question is `D6` versus `D6`, ties failing, with a harmless failure. Either success gives a transient truthful shortest-path direction to the hidden exit. Its Question success, truthful clue, Leave persistence, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-09-13; the Free injury/death branches remain automated-test verified. One Solid Door, one Trap Room, one Library, and one Chained Prisoner are temporarily staged in distinct empty, off-route-preferred rooms; this does not settle final event frequency or distribution.
+Status: **Active**. The event foundation defines and validates finite authored graphs with one-to-four numbered choices, immediate or visible opposed-check branches, margin/catastrophe outcomes, explicit terminal outcomes, truth-tagged transient clues, exact 6x22 event views, controller contracts, and restart-safe presentation intents. The approved Solid Door passed owner Board Lab review on 2026-08-24, including its eligible cache, correct combined level/equipment stats, and no retrigger after backtracking. Room of Blades uses `D6 + SKILL` versus `D6 + DANGER 3`; ties fail, ordinary failure deals 1 HP, failure by 3+ deals 2 HP, raw player `1` versus Danger `6` causes instant death, and success opens the shared eligible cache. Its success, cache/equip, combined-stat, persistence, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-08-26 with a Level 3 Rogue and Shadow Knife. Ancient Library uses Wizard keep-high `POWER` versus `DANGER 4`, scroll/healing/dead-words success rewards, and a persistent Skeleton Knight ambush on failure. Its Wizard success, replacement-scroll, persistence, combined-stat, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-08-26; the ambush branch remains automated-test verified. Chained Prisoner uses class-neutral raw opposed rolls: Free is `2D6` keep-high versus `D6`, ties succeeding, with a 1 HP chain wound on failure; Question is `D6` versus `D6`, ties failing, with a harmless failure. Either success gives a transient truthful shortest-path direction to the hidden exit. Its Question success, truthful clue, Leave persistence, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-09-13; the Free injury/death branches remain automated-test verified. Strange Hole offers Luck-based Look for truthful direction information or a harder Skill-based Reach for the shared cache; a failed Reach deals 1 HP and can kill with cause `THE DARK`. Its Look success, truthful clue, board presentation, and pacing passed owner Board Lab review on 2026-09-13; the Reach/cache/injury branches remain automated-test verified. One Solid Door, one Trap Room, one Library, one Chained Prisoner, and one Strange Hole are temporarily staged in distinct empty, off-route-preferred rooms; this does not settle final event frequency or distribution.
 
 Build:
 
@@ -659,8 +659,8 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Merge the owner-approved class-specific battle-loot flow and four-period opposed-roll trail.
-2. Build the reusable dungeon-event state machine and first class-biased rooms.
+1. Merge the owner-approved Strange Hole event.
+2. Finish the remaining authored Slice 7 event mechanics with explicit owner decisions.
 3. Research official Vestaboard art examples before prototyping the selected-hero, enemy-introduction, and exit-door interstitials for Slice 8.
 
 The order remains physical-first: close the full controller-to-board loop, agree

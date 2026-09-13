@@ -10,12 +10,14 @@ import {
   placePlaytestChainedPrisoner,
   placePlaytestLibrary,
   placePlaytestSolidDoor,
+  placePlaytestStrangeHole,
   placePlaytestTrapRoom,
   resolveLibraryReward,
   resolveSolidDoorCache,
   resolveEventCheckOutcome,
   rollEventCheck,
   SOLID_DOOR_EVENT,
+  STRANGE_HOLE_EVENT,
   TRAP_ROOM_EVENT,
   shortestRoomPath,
   validateEventDefinition,
@@ -375,6 +377,92 @@ describe('authored dungeon events', () => {
     expect(questionRates[0]).toBeLessThan(0.43);
   });
 
+  it('authors the Strange Hole as a one-attempt information or cache choice', () => {
+    expect(() => validateEventDefinition(STRANGE_HOLE_EVENT)).not.toThrow();
+    expect(STRANGE_HOLE_EVENT).toMatchObject({
+      id: 'strange-hole',
+      heading: 'STRANGE HOLE',
+      startNodeId: 'edge',
+    });
+    const [look, reach, leave] = STRANGE_HOLE_EVENT.nodes[0]!.choices;
+    expect([look?.label, reach?.label, leave?.label]).toEqual([
+      'LOOK',
+      'REACH',
+      'LEAVE',
+    ]);
+    expect(look?.resolution).toMatchObject({
+      kind: 'opposed-check',
+      stat: 'luck',
+      danger: 3,
+      ties: 'success',
+      success: {
+        kind: 'clue',
+        clueId: 'exit-first-step',
+        reliability: 'truthful',
+      },
+      failure: { kind: 'node', nodeId: 'darkness' },
+    });
+    expect(reach?.resolution).toMatchObject({
+      kind: 'opposed-check',
+      stat: 'skill',
+      danger: 4,
+      ties: 'failure',
+      success: { kind: 'reward', rewardId: 'strange-hole-cache' },
+      failure: {
+        kind: 'injury',
+        damage: 1,
+        deathCause: 'THE DARK',
+      },
+    });
+  });
+
+  it('makes Rogue strongest at both Strange Hole approaches', () => {
+    const [look, reach] = STRANGE_HOLE_EVENT.nodes[0]!.choices.map(
+      ({ resolution }) => resolution,
+    );
+    if (look?.kind !== 'opposed-check' || reach?.kind !== 'opposed-check') {
+      throw new Error('Expected Strange Hole checks.');
+    }
+    const attempts = 20_000;
+    const successRate = (
+      heroClass: 'warrior' | 'rogue' | 'wizard',
+      resolution: typeof look,
+    ) => {
+      let successes = 0;
+      for (let seed = 1; seed <= attempts; seed += 1) {
+        const stat =
+          resolution.stat === 'none'
+            ? 0
+            : HERO_STARTING_STATS[heroClass][resolution.stat];
+        successes += Number(
+          rollEventCheck(
+            stat,
+            resolution.danger,
+            resolution.ties,
+            createRng(seed),
+          ).succeeded,
+        );
+      }
+      return successes / attempts;
+    };
+    const lookRates = (['warrior', 'rogue', 'wizard'] as const).map((hero) =>
+      successRate(hero, look),
+    );
+    const reachRates = (['warrior', 'rogue', 'wizard'] as const).map((hero) =>
+      successRate(hero, reach),
+    );
+    expect(lookRates[1]).toBeGreaterThan(lookRates[2]!);
+    expect(lookRates[2]).toBeGreaterThan(lookRates[0]!);
+    expect(lookRates[0]).toBeGreaterThan(0.39);
+    expect(lookRates[1]).toBeGreaterThan(0.81);
+    expect(lookRates[2]).toBeGreaterThan(0.69);
+    expect(reachRates[1]).toBeGreaterThan(reachRates[2]!);
+    expect(reachRates[2]).toBeGreaterThan(reachRates[0]!);
+    expect(reachRates[0]).toBeLessThan(0.19);
+    expect(reachRates[1]).toBeGreaterThan(0.56);
+    expect(reachRates[2]).toBeGreaterThan(0.25);
+  });
+
   it('authors the approved one-attempt Solid Door check without a reward table', () => {
     expect(() => validateEventDefinition(SOLID_DOOR_EVENT)).not.toThrow();
     const approach = SOLID_DOOR_EVENT.nodes[0]!;
@@ -583,10 +671,18 @@ describe('authored dungeon events', () => {
           trap.roomId,
           library.roomId,
         ]);
+        const hole = placePlaytestStrangeHole(topology, exitRoomId, [
+          ...occupied,
+          placement.roomId,
+          trap.roomId,
+          library.roomId,
+          prisoner.roomId,
+        ]);
         expect(placement).toMatchObject({ eventId: 'solid-door' });
         expect(trap).toMatchObject({ eventId: 'trap-room' });
         expect(library).toMatchObject({ eventId: 'library' });
         expect(prisoner).toMatchObject({ eventId: 'chained-victim' });
+        expect(hole).toMatchObject({ eventId: 'strange-hole' });
         expect(placement.roomId).not.toBe(topology.entranceRoomId);
         expect(placement.roomId).not.toBe(exitRoomId);
         expect(trap.roomId).not.toBe(topology.entranceRoomId);
@@ -601,10 +697,17 @@ describe('authored dungeon events', () => {
         expect(prisoner.roomId).not.toBe(placement.roomId);
         expect(prisoner.roomId).not.toBe(trap.roomId);
         expect(prisoner.roomId).not.toBe(library.roomId);
+        expect(hole.roomId).not.toBe(topology.entranceRoomId);
+        expect(hole.roomId).not.toBe(exitRoomId);
+        expect(hole.roomId).not.toBe(placement.roomId);
+        expect(hole.roomId).not.toBe(trap.roomId);
+        expect(hole.roomId).not.toBe(library.roomId);
+        expect(hole.roomId).not.toBe(prisoner.roomId);
         expect(occupied).not.toContain(placement.roomId);
         expect(occupied).not.toContain(trap.roomId);
         expect(occupied).not.toContain(library.roomId);
         expect(occupied).not.toContain(prisoner.roomId);
+        expect(occupied).not.toContain(hole.roomId);
         if (
           topology.rooms.some(
             ({ id }) =>

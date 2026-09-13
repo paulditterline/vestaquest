@@ -990,6 +990,7 @@ function parseGameView(value: unknown): GameView {
           'SKELETON KNIGHT',
           'TRAPS',
           'THE CHAINS',
+          'THE DARK',
         ] as const),
         roomsFound: requirePositiveInteger(view.roomsFound, 'rooms found'),
         enemiesSlain: requireNonnegativeInteger(
