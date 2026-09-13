@@ -26,7 +26,7 @@ export const EVENT_IDS = [
 ] as const;
 
 export type EventId = (typeof EVENT_IDS)[number];
-export type EventCheckStat = 'power' | 'defense' | 'skill' | 'luck';
+export type EventCheckStat = 'power' | 'defense' | 'skill' | 'luck' | 'none';
 
 export type PlacedEvent = Readonly<{
   roomId: RoomId;
@@ -38,7 +38,12 @@ export type EventDestination =
   | Readonly<{ kind: 'return-to-map' }>
   | Readonly<{ kind: 'combat'; enemyId: EnemyId }>
   | Readonly<{ kind: 'reward'; rewardId: string }>
-  | Readonly<{ kind: 'injury'; damage: number; message: string }>
+  | Readonly<{
+      kind: 'injury';
+      damage: number;
+      message: string;
+      deathCause?: DeathCause;
+    }>
   | Readonly<{ kind: 'death'; cause: DeathCause }>
   | Readonly<{
       kind: 'clue';
@@ -218,7 +223,7 @@ export function createEventCheckPresentation(input: {
       name: 'DANGER',
       diceLabel: 'D6',
       dice: Object.freeze([input.result.dangerDie]),
-      modifierStat: 'X',
+      modifierStat: input.stat === 'none' ? 'NONE' : 'X',
       modifier: input.danger,
       total: input.result.dangerTotal,
     }),
@@ -535,7 +540,91 @@ export const TRAP_ROOM_EVENT: EventDefinition = Object.freeze({
   ]),
 });
 
+export const CHAINED_PRISONER_EVENT: EventDefinition = Object.freeze({
+  id: 'chained-victim',
+  heading: 'CHAINED PRISONER',
+  startNodeId: 'prisoner',
+  nodes: Object.freeze([
+    Object.freeze({
+      id: 'prisoner',
+      copy: Object.freeze(['ITS FACE STAYS HIDDEN']),
+      choices: Object.freeze([
+        Object.freeze({
+          id: 'free',
+          label: 'FREE',
+          resolvesEvent: true,
+          resolution: Object.freeze({
+            kind: 'opposed-check',
+            stat: 'none',
+            danger: 0,
+            ties: 'success',
+            keepHighFor: Object.freeze(['warrior', 'rogue', 'wizard'] as const),
+            prompt: 'BREAK THE CHAINS',
+            successVerdict: 'THE CHAINS BREAK',
+            failureVerdict: 'THE CHAINS BITE',
+            success: Object.freeze({
+              kind: 'clue',
+              clueId: 'exit-first-step',
+              reliability: 'truthful',
+            }),
+            failure: Object.freeze({
+              kind: 'injury',
+              damage: 1,
+              message: 'THE CHAINS BITE',
+              deathCause: 'THE CHAINS',
+            }),
+          }),
+        }),
+        Object.freeze({
+          id: 'question',
+          label: 'QUESTION',
+          resolvesEvent: true,
+          resolution: Object.freeze({
+            kind: 'opposed-check',
+            stat: 'none',
+            danger: 0,
+            ties: 'failure',
+            keepHighFor: Object.freeze([]),
+            prompt: 'QUESTION THE PRISONER',
+            successVerdict: 'IT SPEAKS TRUE',
+            failureVerdict: 'IT WILL NOT SPEAK',
+            success: Object.freeze({
+              kind: 'clue',
+              clueId: 'exit-first-step',
+              reliability: 'truthful',
+            }),
+            failure: Object.freeze({ kind: 'node', nodeId: 'silent' }),
+          }),
+        }),
+        Object.freeze({
+          id: 'leave',
+          label: 'LEAVE',
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({ kind: 'return-to-map' }),
+          }),
+        }),
+      ]),
+    }),
+    Object.freeze({
+      id: 'silent',
+      copy: Object.freeze(['IT WILL NOT SPEAK']),
+      choices: Object.freeze([
+        Object.freeze({
+          id: 'leave',
+          label: 'LEAVE',
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({ kind: 'return-to-map' }),
+          }),
+        }),
+      ]),
+    }),
+  ]),
+});
+
 export const AUTHORED_EVENTS: readonly EventDefinition[] = Object.freeze([
+  CHAINED_PRISONER_EVENT,
   LIBRARY_EVENT,
   SOLID_DOOR_EVENT,
   TRAP_ROOM_EVENT,
@@ -581,11 +670,24 @@ export function placePlaytestLibrary(
   return placePlaytestEvent(topology, exitRoomId, occupiedRoomIds, 'library');
 }
 
+export function placePlaytestChainedPrisoner(
+  topology: DungeonTopology,
+  exitRoomId: RoomId,
+  occupiedRoomIds: readonly RoomId[],
+): PlacedEvent {
+  return placePlaytestEvent(
+    topology,
+    exitRoomId,
+    occupiedRoomIds,
+    'chained-victim',
+  );
+}
+
 function placePlaytestEvent(
   topology: DungeonTopology,
   exitRoomId: RoomId,
   occupiedRoomIds: readonly RoomId[],
-  eventId: 'library' | 'solid-door' | 'trap-room',
+  eventId: 'chained-victim' | 'library' | 'solid-door' | 'trap-room',
 ): PlacedEvent {
   const unavailable = new Set<RoomId>([
     topology.entranceRoomId,
@@ -873,6 +975,8 @@ function eventRollStat(stat: EventCheckStat): RollStat {
       return 'S';
     case 'luck':
       return 'L';
+    case 'none':
+      return 'NONE';
   }
 }
 

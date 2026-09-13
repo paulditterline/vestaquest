@@ -9,6 +9,9 @@ import {
   deriveTitlePresentation,
   deriveView,
   createRng,
+  getRoom,
+  getTopology,
+  shortestRoomDistance,
   type GameCommand,
   type RunState,
 } from '../src/index.js';
@@ -161,6 +164,42 @@ function libraryState(
       eventId: event.eventId,
       retreatRoomId: state.phase.dungeon.currentRoomId,
       screen: Object.freeze({ kind: 'node' as const, nodeId: 'stacks' }),
+    }),
+  });
+}
+
+function chainedPrisonerState(
+  rngSeed: number,
+  options: Readonly<{
+    classChoice?: string;
+    hp?: number;
+  }> = {},
+): RunState {
+  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.warrior);
+  if (state.phase.kind !== 'exploration') {
+    throw new Error('Expected exploration fixture.');
+  }
+  const event = state.phase.dungeon.events.find(
+    ({ eventId }) => eventId === 'chained-victim',
+  );
+  if (!event) throw new Error('Expected the staged Chained Prisoner.');
+  return Object.freeze({
+    ...state,
+    rng: createRng(rngSeed),
+    phase: Object.freeze({
+      ...state.phase,
+      kind: 'event' as const,
+      stats: Object.freeze({
+        ...state.phase.stats,
+        hp: options.hp ?? state.phase.stats.hp,
+      }),
+      dungeon: Object.freeze({
+        ...state.phase.dungeon,
+        currentRoomId: event.roomId,
+      }),
+      eventId: event.eventId,
+      retreatRoomId: state.phase.dungeon.currentRoomId,
+      screen: Object.freeze({ kind: 'node' as const, nodeId: 'prisoner' }),
     }),
   });
 }
@@ -1186,6 +1225,201 @@ describe('live Ancient Library event flow', () => {
     expect(deriveView(failure.state)).toMatchObject({
       kind: 'combat',
       enemyId: 'skeleton-knight',
+    });
+  });
+});
+
+describe('live Chained Prisoner event flow', () => {
+  it('shows all three choices and lets Leave preserve the encounter', () => {
+    const state = chainedPrisonerState(1);
+    expect(deriveView(state)).toMatchObject({
+      kind: 'event',
+      heading: 'CHAINED PRISONER',
+      copy: ['ITS FACE STAYS HIDDEN'],
+      choices: [
+        { id: 'event.chained-victim.free', number: 1, label: 'FREE' },
+        {
+          id: 'event.chained-victim.question',
+          number: 2,
+          label: 'QUESTION',
+        },
+        { id: 'event.chained-victim.leave', number: 3, label: 'LEAVE' },
+      ],
+    });
+    const left = choose(state, 'leave-prisoner', 'event.chained-victim.leave');
+    expect(left.status).toBe('accepted');
+    if (left.status !== 'accepted' || left.state.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration after leaving.');
+    }
+    expect(
+      left.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'chained-victim',
+      )?.status,
+    ).toBe('active');
+    expect(left.state.rng.draws).toBe(0);
+  });
+
+  it('reveals a truthful shortest-path direction after Free succeeds', () => {
+    let success:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        chainedPrisonerState(seed),
+        `free-prisoner-${seed}`,
+        'event.chained-victim.free',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'THE CHAINS BREAK'
+      ) {
+        success = result;
+        break;
+      }
+    }
+    expect(success).toBeDefined();
+    if (!success || success.state.phase.kind !== 'event') {
+      throw new Error('Expected a successful prisoner event.');
+    }
+    expect(success.presentations[0]).toMatchObject({
+      purpose: 'event',
+      prompt: 'BREAK THE CHAINS',
+      left: { diceLabel: '2D6', modifierStat: 'NONE', modifier: 0 },
+      right: { diceLabel: 'D6', modifierStat: 'NONE', modifier: 0 },
+      verdict: 'THE CHAINS BREAK',
+    });
+    expect(success.state.phase.screen).toMatchObject({
+      kind: 'reward',
+      heading: 'THE PRISONER WHISPERS',
+      copy: [expect.stringMatching(/^GO (NORTH|EAST|SOUTH|WEST) FROM HERE$/)],
+    });
+    if (success.state.phase.screen.kind !== 'reward') {
+      throw new Error('Expected the transient clue.');
+    }
+    const clueDirection = success.state.phase.screen.copy[0]!.split(' ')[1]!.at(
+      0,
+    ) as 'N' | 'E' | 'S' | 'W';
+    const topology = getTopology(success.state.phase.dungeon.topologyId);
+    const currentRoomId = success.state.phase.dungeon.currentRoomId;
+    const connection = getRoom(topology, currentRoomId).connections[
+      clueDirection
+    ];
+    expect(connection?.kind).toBe('room');
+    if (connection?.kind !== 'room') throw new Error('Expected a real path.');
+    expect(
+      shortestRoomDistance(
+        topology,
+        connection.roomId,
+        success.state.phase.dungeon.exitRoomId,
+      ),
+    ).toBe(
+      shortestRoomDistance(
+        topology,
+        currentRoomId,
+        success.state.phase.dungeon.exitRoomId,
+      ) - 1,
+    );
+    expect(
+      success.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'chained-victim',
+      )?.status,
+    ).toBe('resolved');
+  });
+
+  it('makes Question harmless on failure and consumes the encounter', () => {
+    let failure:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        chainedPrisonerState(seed, { classChoice: CHOICE_IDS.rogue }),
+        `question-prisoner-${seed}`,
+        'event.chained-victim.question',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'IT WILL NOT SPEAK'
+      ) {
+        failure = result;
+        break;
+      }
+    }
+    expect(failure).toBeDefined();
+    if (!failure || failure.state.phase.kind !== 'event') {
+      throw new Error('Expected a silent prisoner result.');
+    }
+    expect(failure.presentations[0]).toMatchObject({
+      prompt: 'QUESTION THE PRISONER',
+      left: { name: 'ROGUE', diceLabel: 'D6', modifierStat: 'NONE' },
+      right: { name: 'DANGER', diceLabel: 'D6', modifierStat: 'NONE' },
+      verdict: 'IT WILL NOT SPEAK',
+    });
+    expect(failure.state.phase.screen).toEqual({
+      kind: 'node',
+      nodeId: 'silent',
+    });
+    expect(deriveView(failure.state)).toMatchObject({
+      copy: ['IT WILL NOT SPEAK'],
+      choices: [{ label: 'LEAVE' }],
+    });
+    const left = choose(
+      failure.state,
+      'leave-silent-prisoner',
+      'event.chained-victim.leave',
+    );
+    expect(left.status).toBe('accepted');
+    if (left.status !== 'accepted' || left.state.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration after questioning.');
+    }
+    expect(
+      left.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'chained-victim',
+      )?.status,
+    ).toBe('resolved');
+  });
+
+  it('lets failed chains wound or kill the hero with the authored cause', () => {
+    let wound:
+      Extract<ReturnType<typeof choose>, { status: 'accepted' }> | undefined;
+    let woundSeed: number | undefined;
+    for (let seed = 1; seed <= 1_000; seed += 1) {
+      const result = choose(
+        chainedPrisonerState(seed),
+        `chains-bite-${seed}`,
+        'event.chained-victim.free',
+      );
+      if (
+        result.status === 'accepted' &&
+        result.presentations[0]?.kind === 'opposed-roll' &&
+        result.presentations[0].verdict === 'THE CHAINS BITE'
+      ) {
+        wound = result;
+        woundSeed = seed;
+        break;
+      }
+    }
+    expect(wound?.state.phase).toMatchObject({
+      kind: 'event',
+      stats: { hp: 4 },
+      screen: {
+        kind: 'reward',
+        heading: 'CHAINED PRISONER',
+        copy: ['THE CHAINS BITE', 'LOSE 1 HP'],
+      },
+    });
+    if (!wound || woundSeed === undefined) {
+      throw new Error('Expected a failed Free attempt.');
+    }
+    const fatal = choose(
+      chainedPrisonerState(woundSeed, { hp: 1 }),
+      'fatal-chains',
+      'event.chained-victim.free',
+    );
+    expect(fatal.status).toBe('accepted');
+    if (fatal.status !== 'accepted') throw new Error(fatal.reason);
+    expect(fatal.state.phase).toMatchObject({
+      kind: 'death',
+      cause: 'THE CHAINS',
     });
   });
 });

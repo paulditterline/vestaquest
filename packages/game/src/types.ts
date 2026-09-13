@@ -5,8 +5,8 @@ import type { OpposedRoll } from './combat.js';
 import type { EventId } from './events.js';
 import type { Direction, RoomId } from './topology.js';
 
-export const GAME_STATE_VERSION = 8 as const;
-export const GAME_RULES_VERSION = 'library-v1' as const;
+export const GAME_STATE_VERSION = 9 as const;
+export const GAME_RULES_VERSION = 'chained-prisoner-v1' as const;
 
 export const HERO_CLASSES = ['warrior', 'rogue', 'wizard'] as const;
 export type HeroClass = (typeof HERO_CLASSES)[number];
@@ -163,7 +163,7 @@ export interface VictoryPhase {
   readonly enemiesSlain: number;
 }
 
-export type DeathCause = 'GHOUL' | 'SKELETON KNIGHT' | 'TRAPS';
+export type DeathCause = 'GHOUL' | 'SKELETON KNIGHT' | 'TRAPS' | 'THE CHAINS';
 
 export interface DeathPhase {
   readonly kind: 'death';
@@ -332,7 +332,7 @@ export type GameView =
 export type CombatantName =
   'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT' | 'DANGER';
 
-export type RollStat = 'P' | 'D' | 'S' | 'L' | 'X';
+export type RollStat = 'P' | 'D' | 'S' | 'L' | 'X' | 'NONE';
 
 export interface RollSidePresentation {
   readonly name: CombatantName;

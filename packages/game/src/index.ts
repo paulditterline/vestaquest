@@ -49,6 +49,7 @@ export { placeCoreEncounters, shortestRoomPath } from './encounters.js';
 export type { EncounterPlacement, PlacedEncounter } from './encounters.js';
 export {
   AUTHORED_EVENTS,
+  CHAINED_PRISONER_EVENT,
   EVENT_IDS,
   LIBRARY_EVENT,
   SOLID_DOOR_EVENT,
@@ -56,6 +57,7 @@ export {
   createEventCheckPresentation,
   getEventDefinition,
   placePlaytestLibrary,
+  placePlaytestChainedPrisoner,
   placePlaytestSolidDoor,
   placePlaytestTrapRoom,
   resolveEventCheckOutcome,

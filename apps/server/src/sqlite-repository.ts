@@ -628,6 +628,7 @@ function parseRollSide(value: unknown): OpposedRollPresentation['left'] {
       'S',
       'L',
       'X',
+      'NONE',
     ] as const),
     modifier,
     total,
@@ -988,6 +989,7 @@ function parseGameView(value: unknown): GameView {
           'GHOUL',
           'SKELETON KNIGHT',
           'TRAPS',
+          'THE CHAINS',
         ] as const),
         roomsFound: requirePositiveInteger(view.roomsFound, 'rooms found'),
         enemiesSlain: requireNonnegativeInteger(

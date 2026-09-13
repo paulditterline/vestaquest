@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   AUTHORED_TOPOLOGIES,
+  CHAINED_PRISONER_EVENT,
   createEventCheckPresentation,
   createRng,
   HERO_STARTING_STATS,
   LIBRARY_EVENT,
   placeCoreEncounters,
+  placePlaytestChainedPrisoner,
   placePlaytestLibrary,
   placePlaytestSolidDoor,
   placePlaytestTrapRoom,
@@ -271,6 +273,108 @@ describe('authored dungeon events', () => {
     });
   });
 
+  it('builds a clean unmodified two-track reveal for neutral checks', () => {
+    const result = rollEventCheck(0, 0, 'success', createRng(1), true);
+    expect(
+      createEventCheckPresentation({
+        heroClass: 'warrior',
+        stat: 'none',
+        statValue: 0,
+        danger: 0,
+        result,
+        prompt: 'BREAK THE CHAINS',
+        verdict: 'THE CHAINS BREAK',
+      }),
+    ).toMatchObject({
+      left: { diceLabel: '2D6', modifierStat: 'NONE', modifier: 0 },
+      right: { diceLabel: 'D6', modifierStat: 'NONE', modifier: 0 },
+    });
+  });
+
+  it('authors class-neutral prisoner choices with distinct risk', () => {
+    expect(() => validateEventDefinition(CHAINED_PRISONER_EVENT)).not.toThrow();
+    expect(CHAINED_PRISONER_EVENT).toMatchObject({
+      id: 'chained-victim',
+      heading: 'CHAINED PRISONER',
+      startNodeId: 'prisoner',
+    });
+    const [free, question, leave] = CHAINED_PRISONER_EVENT.nodes[0]!.choices;
+    expect([free?.label, question?.label, leave?.label]).toEqual([
+      'FREE',
+      'QUESTION',
+      'LEAVE',
+    ]);
+    expect(free?.resolution).toMatchObject({
+      kind: 'opposed-check',
+      stat: 'none',
+      danger: 0,
+      ties: 'success',
+      keepHighFor: ['warrior', 'rogue', 'wizard'],
+      success: {
+        kind: 'clue',
+        clueId: 'exit-first-step',
+        reliability: 'truthful',
+      },
+      failure: { kind: 'injury', damage: 1, deathCause: 'THE CHAINS' },
+    });
+    expect(question?.resolution).toMatchObject({
+      kind: 'opposed-check',
+      stat: 'none',
+      danger: 0,
+      ties: 'failure',
+      keepHighFor: [],
+      success: {
+        kind: 'clue',
+        clueId: 'exit-first-step',
+        reliability: 'truthful',
+      },
+      failure: { kind: 'node', nodeId: 'silent' },
+    });
+  });
+
+  it('gives every class the same prisoner odds', () => {
+    const [free, question] = CHAINED_PRISONER_EVENT.nodes[0]!.choices;
+    if (
+      free?.resolution.kind !== 'opposed-check' ||
+      question?.resolution.kind !== 'opposed-check'
+    ) {
+      throw new Error('Expected prisoner checks.');
+    }
+    const freeResolution = free.resolution;
+    const questionResolution = question.resolution;
+    const attempts = 20_000;
+    const rate = (
+      heroClass: 'warrior' | 'rogue' | 'wizard',
+      resolution: typeof freeResolution,
+    ) => {
+      let successes = 0;
+      for (let seed = 1; seed <= attempts; seed += 1) {
+        successes += Number(
+          rollEventCheck(
+            0,
+            resolution.danger,
+            resolution.ties,
+            createRng(seed),
+            resolution.keepHighFor.includes(heroClass),
+          ).succeeded,
+        );
+      }
+      return successes / attempts;
+    };
+    const freeRates = (['warrior', 'rogue', 'wizard'] as const).map((hero) =>
+      rate(hero, freeResolution),
+    );
+    const questionRates = (['warrior', 'rogue', 'wizard'] as const).map(
+      (hero) => rate(hero, questionResolution),
+    );
+    expect(new Set(freeRates).size).toBe(1);
+    expect(new Set(questionRates).size).toBe(1);
+    expect(freeRates[0]).toBeGreaterThan(0.73);
+    expect(freeRates[0]).toBeLessThan(0.76);
+    expect(questionRates[0]).toBeGreaterThan(0.4);
+    expect(questionRates[0]).toBeLessThan(0.43);
+  });
+
   it('authors the approved one-attempt Solid Door check without a reward table', () => {
     expect(() => validateEventDefinition(SOLID_DOOR_EVENT)).not.toThrow();
     const approach = SOLID_DOOR_EVENT.nodes[0]!;
@@ -473,9 +577,16 @@ describe('authored dungeon events', () => {
           placement.roomId,
           trap.roomId,
         ]);
+        const prisoner = placePlaytestChainedPrisoner(topology, exitRoomId, [
+          ...occupied,
+          placement.roomId,
+          trap.roomId,
+          library.roomId,
+        ]);
         expect(placement).toMatchObject({ eventId: 'solid-door' });
         expect(trap).toMatchObject({ eventId: 'trap-room' });
         expect(library).toMatchObject({ eventId: 'library' });
+        expect(prisoner).toMatchObject({ eventId: 'chained-victim' });
         expect(placement.roomId).not.toBe(topology.entranceRoomId);
         expect(placement.roomId).not.toBe(exitRoomId);
         expect(trap.roomId).not.toBe(topology.entranceRoomId);
@@ -485,9 +596,15 @@ describe('authored dungeon events', () => {
         expect(library.roomId).not.toBe(exitRoomId);
         expect(library.roomId).not.toBe(placement.roomId);
         expect(library.roomId).not.toBe(trap.roomId);
+        expect(prisoner.roomId).not.toBe(topology.entranceRoomId);
+        expect(prisoner.roomId).not.toBe(exitRoomId);
+        expect(prisoner.roomId).not.toBe(placement.roomId);
+        expect(prisoner.roomId).not.toBe(trap.roomId);
+        expect(prisoner.roomId).not.toBe(library.roomId);
         expect(occupied).not.toContain(placement.roomId);
         expect(occupied).not.toContain(trap.roomId);
         expect(occupied).not.toContain(library.roomId);
+        expect(occupied).not.toContain(prisoner.roomId);
         if (
           topology.rooms.some(
             ({ id }) =>

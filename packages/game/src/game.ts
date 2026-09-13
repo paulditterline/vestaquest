@@ -22,6 +22,7 @@ import { placeCoreEncounters } from './encounters.js';
 import {
   createEventCheckPresentation,
   getEventDefinition,
+  placePlaytestChainedPrisoner,
   placePlaytestLibrary,
   placePlaytestSolidDoor,
   placePlaytestTrapRoom,
@@ -494,6 +495,16 @@ function transitionFromChoice(
         solidDoor.roomId,
         trapRoom.roomId,
       ]);
+      const chainedPrisoner = placePlaytestChainedPrisoner(
+        topology,
+        selected.exitRoomId,
+        [
+          ...encounterRoomIds,
+          solidDoor.roomId,
+          trapRoom.roomId,
+          library.roomId,
+        ],
+      );
       const dungeon: DungeonRunState = Object.freeze({
         topologyId: selected.topologyId,
         exitRoomId: selected.exitRoomId,
@@ -521,6 +532,10 @@ function transitionFromChoice(
           }),
           Object.freeze({
             ...library,
+            status: 'active' as const,
+          }),
+          Object.freeze({
+            ...chainedPrisoner,
             status: 'active' as const,
           }),
         ]),
@@ -711,7 +726,10 @@ function transitionEvent(
     return applyEventDestination(attempted, choice.resolution.destination, rng);
   }
 
-  const statValue = attempted.stats[choice.resolution.stat];
+  const statValue =
+    choice.resolution.stat === 'none'
+      ? 0
+      : attempted.stats[choice.resolution.stat];
   const result = rollEventCheck(
     statValue,
     choice.resolution.danger,
@@ -849,7 +867,10 @@ function applyEventDestination(
     case 'injury': {
       const hp = Math.max(0, phase.stats.hp - destination.damage);
       if (hp === 0) {
-        return { phase: deathFromEvent(phase, 'TRAPS'), rng };
+        return {
+          phase: deathFromEvent(phase, destination.deathCause ?? 'TRAPS'),
+          rng,
+        };
       }
       return {
         phase: Object.freeze({
@@ -899,10 +920,66 @@ function applyEventDestination(
         rng,
       );
     }
-    case 'clue':
-      throw new Error(
-        `Event destination ${destination.kind} is not active yet.`,
-      );
+    case 'clue': {
+      if (
+        destination.clueId !== 'exit-first-step' ||
+        destination.reliability !== 'truthful'
+      ) {
+        throw new Error(`Unknown event clue ${destination.clueId}.`);
+      }
+      const direction = truthfulExitDirection(phase);
+      return {
+        phase: Object.freeze({
+          ...phase,
+          screen: Object.freeze({
+            kind: 'reward',
+            heading: 'THE PRISONER WHISPERS',
+            copy: Object.freeze([`GO ${directionName(direction)} FROM HERE`]),
+          }),
+        }),
+        rng,
+      };
+    }
+  }
+}
+
+function truthfulExitDirection(phase: EventPhase): Direction {
+  const topology = getTopology(phase.dungeon.topologyId);
+  const currentRoomId = phase.dungeon.currentRoomId;
+  const distance = shortestRoomDistance(
+    topology,
+    currentRoomId,
+    phase.dungeon.exitRoomId,
+  );
+  for (const direction of DIRECTIONS) {
+    const connection = getRoom(topology, currentRoomId).connections[direction];
+    if (
+      connection?.kind === 'room' &&
+      shortestRoomDistance(
+        topology,
+        connection.roomId,
+        phase.dungeon.exitRoomId,
+      ) ===
+        distance - 1
+    ) {
+      return direction;
+    }
+  }
+  throw new Error('Truthful exit clue has no shorter connected room.');
+}
+
+function directionName(
+  direction: Direction,
+): 'NORTH' | 'EAST' | 'SOUTH' | 'WEST' {
+  switch (direction) {
+    case 'N':
+      return 'NORTH';
+    case 'E':
+      return 'EAST';
+    case 'S':
+      return 'SOUTH';
+    case 'W':
+      return 'WEST';
   }
 }
 

@@ -166,15 +166,15 @@ describe('SqliteSessionRepository', () => {
         { id: 'event.solid-door.leave', number: 3, label: 'LEAVE' },
       ],
     };
-    const check = rollEventCheck(5, 4, 'failure', createRng(1));
+    const check = rollEventCheck(0, 0, 'success', createRng(1), true);
     const roll = createEventCheckPresentation({
       heroClass: 'warrior',
-      stat: 'power',
-      statValue: 5,
-      danger: 4,
+      stat: 'none',
+      statValue: 0,
+      danger: 0,
       result: check,
-      prompt: 'BASH THE DOOR',
-      verdict: 'THE DOOR BREAKS',
+      prompt: 'BREAK THE CHAINS',
+      verdict: 'THE CHAINS BREAK',
     });
     const session: StoredSession = {
       sessionId,
@@ -213,12 +213,12 @@ describe('SqliteSessionRepository', () => {
         payload: {
           kind: 'game-view',
           view: {
-            id: 'trap-death',
+            id: 'chain-death',
             revision: 0,
             kind: 'death',
             heroClass: 'rogue',
             heading: 'YOU DIED',
-            cause: 'TRAPS',
+            cause: 'THE CHAINS',
             roomsFound: 4,
             enemiesSlain: 1,
             roomsUntilExit: 5,
@@ -238,15 +238,15 @@ describe('SqliteSessionRepository', () => {
           kind: 'roll-result',
           presentation: {
             purpose: 'event',
-            left: { modifierStat: 'P' },
-            right: { name: 'DANGER', modifierStat: 'X' },
+            left: { modifierStat: 'NONE' },
+            right: { name: 'DANGER', modifierStat: 'NONE' },
           },
         },
       },
       {
         payload: {
           kind: 'game-view',
-          view: { kind: 'death', cause: 'TRAPS' },
+          view: { kind: 'death', cause: 'THE CHAINS' },
         },
       },
     ]);
