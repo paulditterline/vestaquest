@@ -22,11 +22,7 @@ import { placeCoreEncounters } from './encounters.js';
 import {
   createEventCheckPresentation,
   getEventDefinition,
-  placePlaytestChainedPrisoner,
-  placePlaytestLibrary,
-  placePlaytestSolidDoor,
-  placePlaytestStrangeHole,
-  placePlaytestTrapRoom,
+  placeInitialEvents,
   resolveEventCheckOutcome,
   resolveLibraryReward,
   resolveSolidDoorCache,
@@ -482,40 +478,10 @@ function transitionFromChoice(
       );
       const topology = getTopology(selected.topologyId);
       const encounterRoomIds = placement.encounters.map(({ roomId }) => roomId);
-      const solidDoor = placePlaytestSolidDoor(
+      const events = placeInitialEvents(
         topology,
         selected.exitRoomId,
         encounterRoomIds,
-      );
-      const trapRoom = placePlaytestTrapRoom(topology, selected.exitRoomId, [
-        ...encounterRoomIds,
-        solidDoor.roomId,
-      ]);
-      const library = placePlaytestLibrary(topology, selected.exitRoomId, [
-        ...encounterRoomIds,
-        solidDoor.roomId,
-        trapRoom.roomId,
-      ]);
-      const chainedPrisoner = placePlaytestChainedPrisoner(
-        topology,
-        selected.exitRoomId,
-        [
-          ...encounterRoomIds,
-          solidDoor.roomId,
-          trapRoom.roomId,
-          library.roomId,
-        ],
-      );
-      const strangeHole = placePlaytestStrangeHole(
-        topology,
-        selected.exitRoomId,
-        [
-          ...encounterRoomIds,
-          solidDoor.roomId,
-          trapRoom.roomId,
-          library.roomId,
-          chainedPrisoner.roomId,
-        ],
       );
       const dungeon: DungeonRunState = Object.freeze({
         topologyId: selected.topologyId,
@@ -533,28 +499,11 @@ function transitionFromChoice(
             }),
           ),
         ),
-        events: Object.freeze([
-          Object.freeze({
-            ...solidDoor,
-            status: 'active' as const,
-          }),
-          Object.freeze({
-            ...trapRoom,
-            status: 'active' as const,
-          }),
-          Object.freeze({
-            ...library,
-            status: 'active' as const,
-          }),
-          Object.freeze({
-            ...chainedPrisoner,
-            status: 'active' as const,
-          }),
-          Object.freeze({
-            ...strangeHole,
-            status: 'active' as const,
-          }),
-        ]),
+        events: Object.freeze(
+          events.map((event) =>
+            Object.freeze({ ...event, status: 'active' as const }),
+          ),
+        ),
       });
       return {
         phase: Object.freeze({

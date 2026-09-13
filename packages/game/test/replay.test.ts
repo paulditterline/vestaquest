@@ -138,7 +138,11 @@ describe('accepted-command replay', () => {
     if (replayed.phase.kind !== 'exploration') {
       throw new Error('Expected replayed exploration.');
     }
-    expect(replayed.phase.dungeon.events[0]?.status).toBe('resolved');
+    expect(
+      replayed.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'solid-door',
+      )?.status,
+    ).toBe('resolved');
   });
 
   it('replays the staged Trap Room roll and its terminal outcome exactly', () => {

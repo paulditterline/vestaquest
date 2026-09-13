@@ -5,13 +5,10 @@ import {
   createEventCheckPresentation,
   createRng,
   HERO_STARTING_STATS,
+  INITIAL_EVENT_COUNT,
   LIBRARY_EVENT,
   placeCoreEncounters,
-  placePlaytestChainedPrisoner,
-  placePlaytestLibrary,
-  placePlaytestSolidDoor,
-  placePlaytestStrangeHole,
-  placePlaytestTrapRoom,
+  placeInitialEvents,
   resolveLibraryReward,
   resolveSolidDoorCache,
   resolveEventCheckOutcome,
@@ -637,89 +634,76 @@ describe('authored dungeon events', () => {
     expect(result.rng.draws).toBe(0);
   });
 
-  it('stages the playtest door away from the entrance and exit', () => {
+  it('selects three class-independent events and spaces them across every map', () => {
+    const observedEventIds = new Set<string>();
+    const minimumSpacings: number[] = [];
     for (const topology of AUTHORED_TOPOLOGIES) {
       for (const exitRoomId of topology.exitCandidateRoomIds) {
-        const directRoute = shortestRoomPath(
-          topology,
-          topology.entranceRoomId,
-          exitRoomId,
-        );
         const encounters = placeCoreEncounters(
           topology,
           exitRoomId,
           createRng(1),
         ).encounters;
         const occupied = encounters.map(({ roomId }) => roomId);
-        const placement = placePlaytestSolidDoor(
-          topology,
-          exitRoomId,
-          occupied,
+        const directRoute = new Set(
+          shortestRoomPath(topology, topology.entranceRoomId, exitRoomId),
         );
-        const trap = placePlaytestTrapRoom(topology, exitRoomId, [
-          ...occupied,
-          placement.roomId,
-        ]);
-        const library = placePlaytestLibrary(topology, exitRoomId, [
-          ...occupied,
-          placement.roomId,
-          trap.roomId,
-        ]);
-        const prisoner = placePlaytestChainedPrisoner(topology, exitRoomId, [
-          ...occupied,
-          placement.roomId,
-          trap.roomId,
-          library.roomId,
-        ]);
-        const hole = placePlaytestStrangeHole(topology, exitRoomId, [
-          ...occupied,
-          placement.roomId,
-          trap.roomId,
-          library.roomId,
-          prisoner.roomId,
-        ]);
-        expect(placement).toMatchObject({ eventId: 'solid-door' });
-        expect(trap).toMatchObject({ eventId: 'trap-room' });
-        expect(library).toMatchObject({ eventId: 'library' });
-        expect(prisoner).toMatchObject({ eventId: 'chained-victim' });
-        expect(hole).toMatchObject({ eventId: 'strange-hole' });
-        expect(placement.roomId).not.toBe(topology.entranceRoomId);
-        expect(placement.roomId).not.toBe(exitRoomId);
-        expect(trap.roomId).not.toBe(topology.entranceRoomId);
-        expect(trap.roomId).not.toBe(exitRoomId);
-        expect(trap.roomId).not.toBe(placement.roomId);
-        expect(library.roomId).not.toBe(topology.entranceRoomId);
-        expect(library.roomId).not.toBe(exitRoomId);
-        expect(library.roomId).not.toBe(placement.roomId);
-        expect(library.roomId).not.toBe(trap.roomId);
-        expect(prisoner.roomId).not.toBe(topology.entranceRoomId);
-        expect(prisoner.roomId).not.toBe(exitRoomId);
-        expect(prisoner.roomId).not.toBe(placement.roomId);
-        expect(prisoner.roomId).not.toBe(trap.roomId);
-        expect(prisoner.roomId).not.toBe(library.roomId);
-        expect(hole.roomId).not.toBe(topology.entranceRoomId);
-        expect(hole.roomId).not.toBe(exitRoomId);
-        expect(hole.roomId).not.toBe(placement.roomId);
-        expect(hole.roomId).not.toBe(trap.roomId);
-        expect(hole.roomId).not.toBe(library.roomId);
-        expect(hole.roomId).not.toBe(prisoner.roomId);
-        expect(occupied).not.toContain(placement.roomId);
-        expect(occupied).not.toContain(trap.roomId);
-        expect(occupied).not.toContain(library.roomId);
-        expect(occupied).not.toContain(prisoner.roomId);
-        expect(occupied).not.toContain(hole.roomId);
-        if (
-          topology.rooms.some(
-            ({ id }) =>
-              id !== topology.entranceRoomId &&
-              id !== exitRoomId &&
-              !directRoute.includes(id),
-          )
-        ) {
-          expect(directRoute).not.toContain(placement.roomId);
+        const eligibleOffRouteRooms = topology.rooms.filter(
+          ({ id }) =>
+            id !== topology.entranceRoomId &&
+            id !== exitRoomId &&
+            !occupied.includes(id) &&
+            !directRoute.has(id),
+        ).length;
+        const placements = placeInitialEvents(topology, exitRoomId, occupied);
+        expect(placements).toHaveLength(INITIAL_EVENT_COUNT);
+        expect(placeInitialEvents(topology, exitRoomId, occupied)).toEqual(
+          placements,
+        );
+        expect(new Set(placements.map(({ eventId }) => eventId)).size).toBe(
+          INITIAL_EVENT_COUNT,
+        );
+        expect(new Set(placements.map(({ roomId }) => roomId)).size).toBe(
+          INITIAL_EVENT_COUNT,
+        );
+        expect(
+          placements.filter(({ roomId }) => !directRoute.has(roomId)).length,
+        ).toBe(Math.min(INITIAL_EVENT_COUNT, eligibleOffRouteRooms));
+        for (const placement of placements) {
+          observedEventIds.add(placement.eventId);
+          expect(placement.roomId).not.toBe(topology.entranceRoomId);
+          expect(placement.roomId).not.toBe(exitRoomId);
+          expect(occupied).not.toContain(placement.roomId);
         }
+        const pairSpacings: number[] = [];
+        for (let left = 0; left < placements.length; left += 1) {
+          for (let right = left + 1; right < placements.length; right += 1) {
+            pairSpacings.push(
+              shortestRoomPath(
+                topology,
+                placements[left]!.roomId,
+                placements[right]!.roomId,
+              ).length - 1,
+            );
+          }
+        }
+        minimumSpacings.push(Math.min(...pairSpacings));
       }
     }
+    expect(Math.min(...minimumSpacings)).toBeGreaterThanOrEqual(2);
+    expect(
+      minimumSpacings.reduce((total, spacing) => total + spacing, 0) /
+        minimumSpacings.length,
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(observedEventIds).toEqual(
+      new Set([
+        'solid-door',
+        'trap-room',
+        'library',
+        'chained-victim',
+        'strange-hole',
+      ]),
+    );
   });
 
   it('authors the approved one-search Ancient Library', () => {

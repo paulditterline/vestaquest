@@ -12,6 +12,7 @@ import {
   getRoom,
   getTopology,
   shortestRoomDistance,
+  type EventId,
   type GameCommand,
   type RunState,
 } from '../src/index.js';
@@ -44,6 +45,24 @@ function beginExploration(
   return accept(createRun(seed), 'choose-class', classChoice);
 }
 
+function beginExplorationWithEvent(
+  eventId: EventId,
+  classChoice: string,
+): RunState {
+  for (let seed = 1; seed <= 1_000; seed += 1) {
+    const state = beginExploration(seed, classChoice);
+    if (
+      state.phase.kind === 'exploration' &&
+      state.phase.dungeon.events.some(
+        (candidate) => candidate.eventId === eventId,
+      )
+    ) {
+      return state;
+    }
+  }
+  throw new Error(`No deterministic fixture includes ${eventId}.`);
+}
+
 function jsonCopy<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -59,11 +78,16 @@ function solidDoorState(
     }>;
   }> = {},
 ): RunState {
-  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.warrior);
+  const state = beginExplorationWithEvent(
+    'solid-door',
+    options.classChoice ?? CHOICE_IDS.warrior,
+  );
   if (state.phase.kind !== 'exploration') {
     throw new Error('Expected exploration fixture.');
   }
-  const event = state.phase.dungeon.events[0];
+  const event = state.phase.dungeon.events.find(
+    ({ eventId }) => eventId === 'solid-door',
+  );
   if (!event) throw new Error('Expected the staged Solid Door.');
   return Object.freeze({
     ...state,
@@ -95,7 +119,10 @@ function trapRoomState(
     consumable?: 'healing-draught' | null;
   }> = {},
 ): RunState {
-  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.rogue);
+  const state = beginExplorationWithEvent(
+    'trap-room',
+    options.classChoice ?? CHOICE_IDS.rogue,
+  );
   if (state.phase.kind !== 'exploration') {
     throw new Error('Expected exploration fixture.');
   }
@@ -136,7 +163,10 @@ function libraryState(
     scrollPouch?: readonly ('fireball' | 'lightning' | 'stun')[];
   }> = {},
 ): RunState {
-  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.wizard);
+  const state = beginExplorationWithEvent(
+    'library',
+    options.classChoice ?? CHOICE_IDS.wizard,
+  );
   if (state.phase.kind !== 'exploration') {
     throw new Error('Expected exploration fixture.');
   }
@@ -175,7 +205,10 @@ function chainedPrisonerState(
     hp?: number;
   }> = {},
 ): RunState {
-  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.warrior);
+  const state = beginExplorationWithEvent(
+    'chained-victim',
+    options.classChoice ?? CHOICE_IDS.warrior,
+  );
   if (state.phase.kind !== 'exploration') {
     throw new Error('Expected exploration fixture.');
   }
@@ -216,7 +249,10 @@ function strangeHoleState(
     }>;
   }> = {},
 ): RunState {
-  const state = beginExploration(10, options.classChoice ?? CHOICE_IDS.rogue);
+  const state = beginExplorationWithEvent(
+    'strange-hole',
+    options.classChoice ?? CHOICE_IDS.rogue,
+  );
   if (state.phase.kind !== 'exploration') {
     throw new Error('Expected exploration fixture.');
   }
@@ -340,6 +376,23 @@ describe('map exploration game kernel', () => {
       },
     });
     expect(state.rng.draws).toBe(6);
+  });
+
+  it('selects the same three spaced events for every class', () => {
+    const eventSets = [
+      CHOICE_IDS.warrior,
+      CHOICE_IDS.rogue,
+      CHOICE_IDS.wizard,
+    ].map((choiceId) => {
+      const state = beginExploration(10, choiceId);
+      if (state.phase.kind !== 'exploration') {
+        throw new Error('Expected exploration.');
+      }
+      return state.phase.dungeon.events;
+    });
+    expect(eventSets[0]).toHaveLength(3);
+    expect(eventSets[1]).toEqual(eventSets[0]);
+    expect(eventSets[2]).toEqual(eventSets[0]);
   });
 
   it('shows only authoritative numbered directions and keeps the exit hidden', () => {
@@ -1009,7 +1062,11 @@ describe('live Solid Door event flow', () => {
       kind: 'node',
       nodeId: 'door-holds',
     });
-    expect(failed.state.phase.dungeon.events[0]?.status).toBe('resolved');
+    expect(
+      failed.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'solid-door',
+      )?.status,
+    ).toBe('resolved');
 
     const withdrawn = choose(
       failed.state,
@@ -1022,7 +1079,11 @@ describe('live Solid Door event flow', () => {
     if (withdrawn.state.phase.kind !== 'exploration') {
       throw new Error('Expected exploration.');
     }
-    expect(withdrawn.state.phase.dungeon.events[0]?.status).toBe('resolved');
+    expect(
+      withdrawn.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'solid-door',
+      )?.status,
+    ).toBe('resolved');
   });
 
   it('applies every eligible successful cache result through its board flow', () => {
@@ -1109,7 +1170,11 @@ describe('live Solid Door event flow', () => {
     expect(
       equipped.state.phase.stats.power + equipped.state.phase.stats.defense,
     ).toBe(beforePower + beforeDefense + 1);
-    expect(equipped.state.phase.dungeon.events[0]?.status).toBe('resolved');
+    expect(
+      equipped.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'solid-door',
+      )?.status,
+    ).toBe('resolved');
   });
 });
 

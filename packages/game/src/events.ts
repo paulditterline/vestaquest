@@ -713,6 +713,15 @@ export const AUTHORED_EVENTS: readonly EventDefinition[] = Object.freeze([
   TRAP_ROOM_EVENT,
 ]);
 
+export const INITIAL_EVENT_COUNT = 3 as const;
+const INITIAL_EVENT_POOL = Object.freeze([
+  'solid-door',
+  'trap-room',
+  'library',
+  'chained-victim',
+  'strange-hole',
+] as const satisfies readonly EventId[]);
+
 export function getEventDefinition(eventId: EventId): EventDefinition {
   const definition = AUTHORED_EVENTS.find(({ id }) => id === eventId);
   if (!definition) throw new RangeError(`Unknown authored event ${eventId}.`);
@@ -720,89 +729,107 @@ export function getEventDefinition(eventId: EventId): EventDefinition {
 }
 
 /**
- * Temporary Slice 7 playtest placement. It stages one Solid Door in an empty
- * off-route room when possible, without consuming RNG or defining the final
- * event frequency/distribution model.
+ * Selects three distinct authored events without consulting the hero class,
+ * then keeps as many as possible off the direct route before maximizing their
+ * separation and preferring deeper rooms.
+ * Topology/exit selection already comes from the run seed, so this adds
+ * catalog variety without consuming combat/event RNG or adapting the dungeon
+ * around the chosen class.
  */
-export function placePlaytestSolidDoor(
+export function placeInitialEvents(
   topology: DungeonTopology,
   exitRoomId: RoomId,
   occupiedRoomIds: readonly RoomId[],
-): PlacedEvent {
-  return placePlaytestEvent(
-    topology,
-    exitRoomId,
-    occupiedRoomIds,
-    'solid-door',
-  );
-}
-
-export function placePlaytestTrapRoom(
-  topology: DungeonTopology,
-  exitRoomId: RoomId,
-  occupiedRoomIds: readonly RoomId[],
-): PlacedEvent {
-  return placePlaytestEvent(topology, exitRoomId, occupiedRoomIds, 'trap-room');
-}
-
-export function placePlaytestLibrary(
-  topology: DungeonTopology,
-  exitRoomId: RoomId,
-  occupiedRoomIds: readonly RoomId[],
-): PlacedEvent {
-  return placePlaytestEvent(topology, exitRoomId, occupiedRoomIds, 'library');
-}
-
-export function placePlaytestChainedPrisoner(
-  topology: DungeonTopology,
-  exitRoomId: RoomId,
-  occupiedRoomIds: readonly RoomId[],
-): PlacedEvent {
-  return placePlaytestEvent(
-    topology,
-    exitRoomId,
-    occupiedRoomIds,
-    'chained-victim',
-  );
-}
-
-export function placePlaytestStrangeHole(
-  topology: DungeonTopology,
-  exitRoomId: RoomId,
-  occupiedRoomIds: readonly RoomId[],
-): PlacedEvent {
-  return placePlaytestEvent(
-    topology,
-    exitRoomId,
-    occupiedRoomIds,
-    'strange-hole',
-  );
-}
-
-function placePlaytestEvent(
-  topology: DungeonTopology,
-  exitRoomId: RoomId,
-  occupiedRoomIds: readonly RoomId[],
-  eventId:
-    'chained-victim' | 'library' | 'solid-door' | 'strange-hole' | 'trap-room',
-): PlacedEvent {
+): readonly PlacedEvent[] {
   const unavailable = new Set<RoomId>([
     topology.entranceRoomId,
     exitRoomId,
     ...occupiedRoomIds,
   ]);
+  const candidates = topology.rooms.filter(({ id }) => !unavailable.has(id));
+  if (candidates.length < INITIAL_EVENT_COUNT) {
+    throw new RangeError('Initial event placement has fewer than three rooms.');
+  }
   const directRoute = new Set(
     shortestRoomPath(topology, topology.entranceRoomId, exitRoomId),
   );
-  const offRoute = topology.rooms.find(
-    ({ id }) => !unavailable.has(id) && !directRoute.has(id),
-  );
-  const fallback = topology.rooms.find(({ id }) => !unavailable.has(id));
-  const room = offRoute ?? fallback;
-  if (!room) {
-    throw new RangeError(`${eventId} playtest placement has no empty room.`);
+  let bestRoomIds: readonly RoomId[] | undefined;
+  let bestScore: readonly number[] | undefined;
+  for (let first = 0; first < candidates.length - 2; first += 1) {
+    for (let second = first + 1; second < candidates.length - 1; second += 1) {
+      for (let third = second + 1; third < candidates.length; third += 1) {
+        const roomIds = Object.freeze([
+          candidates[first]!.id,
+          candidates[second]!.id,
+          candidates[third]!.id,
+        ]);
+        const pairDistances = [
+          roomDistance(topology, roomIds[0]!, roomIds[1]!),
+          roomDistance(topology, roomIds[0]!, roomIds[2]!),
+          roomDistance(topology, roomIds[1]!, roomIds[2]!),
+        ];
+        const score = Object.freeze([
+          roomIds.filter((roomId) => !directRoute.has(roomId)).length,
+          Math.min(...pairDistances),
+          pairDistances.reduce((total, distance) => total + distance, 0),
+          roomIds.reduce(
+            (total, roomId) =>
+              total + roomDistance(topology, topology.entranceRoomId, roomId),
+            0,
+          ),
+        ]);
+        if (!bestScore || comparePlacementScore(score, bestScore) > 0) {
+          bestRoomIds = roomIds;
+          bestScore = score;
+        }
+      }
+    }
   }
-  return Object.freeze({ roomId: room.id, eventId });
+  if (!bestRoomIds) throw new Error('Initial event placement failed.');
+  const eventIds = selectInitialEventIds(topology.id, exitRoomId);
+  return Object.freeze(
+    eventIds.map((eventId, index) =>
+      Object.freeze({ roomId: bestRoomIds[index]!, eventId }),
+    ),
+  );
+}
+
+function selectInitialEventIds(
+  topologyId: string,
+  exitRoomId: RoomId,
+): readonly EventId[] {
+  let hash = 0x811c9dc5;
+  for (const character of `${topologyId}:${exitRoomId}`) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  const start = hash % INITIAL_EVENT_POOL.length;
+  return Object.freeze(
+    Array.from(
+      { length: INITIAL_EVENT_COUNT },
+      (_, index) =>
+        INITIAL_EVENT_POOL[(start + index * 2) % INITIAL_EVENT_POOL.length]!,
+    ),
+  );
+}
+
+function roomDistance(
+  topology: DungeonTopology,
+  fromRoomId: RoomId,
+  toRoomId: RoomId,
+): number {
+  return shortestRoomPath(topology, fromRoomId, toRoomId).length - 1;
+}
+
+function comparePlacementScore(
+  candidate: readonly number[],
+  incumbent: readonly number[],
+): number {
+  for (let index = 0; index < candidate.length; index += 1) {
+    const difference = candidate[index]! - incumbent[index]!;
+    if (difference !== 0) return difference;
+  }
+  return 0;
 }
 
 /**
