@@ -8,7 +8,7 @@ The player chooses a Warrior, Rogue, or Wizard, explores a progressively reveale
 
 ## Status
 
-Implementation is underway. Slices 0–5 and Gates A–D are complete and merged; Slice 6 is active and Slice 7 is complete pending merge. The project now has the deterministic board package, Flagship simulator, server-only Cloud transport, ordered cadence queue, deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, runnable private development composition, and SQLite restart durability. The signature initiative sequence and complete guarded controller-to-Cloud vertical path have both been accepted by the owner on the physical black-shell Flagship. Gate C's exact 5x5 map/HUD grammar is approved. Ten validated authored dungeons support deterministic selection, alternate hidden exits, persistent frontier discovery, dead ends, two-way movement, backtracking, and exact live map rendering through the real controller pipeline. Every topology now contains multiple real junctions and at least one loop, and the hidden-exit catalog averages at least 8.5 moves from its entrance while retaining a few tighter maps for variety. Slice 5 adds deterministic initiative, opposed attacks, Warrior Smash, Run, explicit healing feedback, consumables, automatic advancement, Ghoul and Skeleton Knight encounters, persistent combat state, and exact victory/death statistics. Its final physical review was approved on 2026-08-11 with ordinary board transitions preserved for every frame. Slice 6 includes owner-approved Wizard scroll, Rogue Steal/Unaware, and class-specific equipment flows. Slice 7's private-alpha roster is closed at the owner-reviewed Solid Door, Room of Blades, Ancient Library, Chained Prisoner, and Strange Hole. Each run chooses three of those five deterministically, independently of class, and places them off the direct exit route where possible with at least two graph moves between events. A complete owner Board Lab run approved the resulting event density on 2026-09-13. The Strange Hole's Reach/cache/injury branches, the Chained Prisoner's Free injury/death branches, and the Library's ambush branch remain automated-test verified.
+Implementation is underway. Slices 0–5 and 7 and Gates A–D are complete and merged; Slice 6 is active pending its simulation review. The project now has the deterministic board package, Flagship simulator, server-only Cloud transport, ordered cadence queue, deterministic game kernel, versioned controller contracts, semantic board renderers, authoritative session service, sanitized Fastify API, minimal numbered controller, ordered presentation coordinator, runnable private development composition, and SQLite restart durability. The signature initiative sequence and complete guarded controller-to-Cloud vertical path have both been accepted by the owner on the physical black-shell Flagship. Gate C's exact 5x5 map/HUD grammar is approved. Ten validated authored dungeons support deterministic selection, alternate hidden exits, persistent frontier discovery, dead ends, two-way movement, backtracking, and exact live map rendering through the real controller pipeline. Every topology now contains multiple real junctions and at least one loop, and the hidden-exit catalog averages at least 8.5 moves from its entrance while retaining a few tighter maps for variety. Slice 5 adds deterministic initiative, opposed attacks, Warrior Smash, Run, explicit healing feedback, consumables, automatic advancement, Ghoul and Skeleton Knight encounters, persistent combat state, and exact victory/death statistics. Its final physical review was approved on 2026-08-11 with ordinary board transitions preserved for every frame. Slice 6 includes owner-approved Wizard scroll, Rogue Steal/Unaware, and class-specific equipment flows. Slice 7's private-alpha roster is closed at the owner-reviewed Solid Door, Room of Blades, Ancient Library, Chained Prisoner, and Strange Hole. Each run chooses three of those five deterministically, independently of class, and places them off the direct exit route where possible with at least two graph moves between events. A complete owner Board Lab run approved the resulting event density on 2026-09-13. A deterministic 3,000-run class-readiness probe reached the final exit approach in 99.8% of Warrior runs, 64.4% of Rogue runs, and 80.1% of Wizard runs, with no stalls; the spread is preserved for Gate E rather than treated as final balance. The Strange Hole's Reach/cache/injury branches, the Chained Prisoner's Free injury/death branches, and the Library's ambush branch remain automated-test verified.
 
 ## Run the Board Lab
 
@@ -35,6 +35,15 @@ npm run check
 npx playwright install chromium
 npm run test:e2e
 ```
+
+To reproduce the heavyweight 3,000-run class-readiness acceptance report:
+
+```sh
+npm run simulate:readiness -- 1000
+```
+
+The methodology and current results are recorded in
+[`docs/balance/class-readiness.md`](./docs/balance/class-readiness.md).
 
 The browser download is a one-time local setup step. None of these commands requires a Vestaboard token or network access to a board.
 
@@ -104,6 +113,7 @@ Each feature branch is tested locally before a PR. Critical layouts then graduat
 
 - [`PLAN.md`](./PLAN.md) — architecture, decision gates, delivery slices, test strategy, and branch/PR workflow.
 - [`AGENTS.md`](./AGENTS.md) — durable product requirements, verified Vestaboard constraints, API research, and project guardrails.
+- [`docs/balance/class-readiness.md`](./docs/balance/class-readiness.md) — reproducible class-readiness policy, acceptance definition, and current distribution.
 - [`docs/architecture/transport-queue.md`](./docs/architecture/transport-queue.md) — ordering, cadence, retry, ambiguity, and Slice 3 durability boundaries.
 - [`docs/hardware/private-playable-acceptance.md`](./docs/hardware/private-playable-acceptance.md) — guarded Cloud/physical vertical-slice runbook and acceptance checklist.
 
