@@ -149,6 +149,19 @@ export type {
   VictoryView,
 } from './types.js';
 export type { RngDraw, RngState, RngVersion } from './rng.js';
+export {
+  DEFAULT_READINESS_COMMAND_LIMIT,
+  DEFAULT_READINESS_RUNS_PER_CLASS,
+  EXIT_READINESS_POLICY_VERSION,
+  simulateExitReadiness,
+  simulateExitReadinessReport,
+} from './simulation.js';
+export type {
+  ExitReadinessClassSummary,
+  ExitReadinessOutcome,
+  ExitReadinessReport,
+  ExitReadinessResult,
+} from './simulation.js';
 export type {
   Direction,
   DungeonRoom,

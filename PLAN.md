@@ -1,6 +1,6 @@
 # VestaQuest implementation plan
 
-Status: Slices 0–5 complete and merged; Slice 6 active; Slice 7 complete pending merge
+Status: Slices 0–5 and 7 complete and merged; Slice 6 closure pending simulation review
 
 Last updated: 2026-09-13
 
@@ -524,9 +524,9 @@ Acceptance:
 
 ### Slice 6 — class identity, equipment, and progression
 
-Branch: `codex/classes-and-loot`
+Branch: `codex/class-readiness-simulation`
 
-Status: **Active**. The first playable feature implements the Wizard's three-scroll pouch, spell submenu, Fireball/Lightning/Stun resolution, initial Ghoul and Skeleton Knight affinities, exact board views, persistence, and controller flow. Automated verification and owner Board Lab review passed on 2026-08-12. Rogue Steal/Unaware and its first enemy-specific equipment rewards also passed owner Board Lab review on 2026-08-12. Ordinary class-specific weapon/armor rewards after victories passed owner physical review on 2026-08-23, including safe post-combat continuation and the empty-slot Iron Sword and Chain Mail Equip flows. The owner also physically approved replacing the opposed-roll solid color tracks with four period characters on 2026-08-23.
+Status: **Active; closure simulation complete pending owner review**. The first playable feature implements the Wizard's three-scroll pouch, spell submenu, Fireball/Lightning/Stun resolution, initial Ghoul and Skeleton Knight affinities, exact board views, persistence, and controller flow. Automated verification and owner Board Lab review passed on 2026-08-12. Rogue Steal/Unaware and its first enemy-specific equipment rewards also passed owner Board Lab review on 2026-08-12. Ordinary class-specific weapon/armor rewards after victories passed owner physical review on 2026-08-23, including safe post-combat continuation and the empty-slot Iron Sword and Chain Mail Equip flows. The owner also physically approved replacing the opposed-roll solid color tracks with four period characters on 2026-08-23. A 3,000-run deterministic shortest-route probe on 2026-09-13 reached an exit-ready state in 99.8% of Warrior runs, 64.4% of Rogue runs, and 80.1% of Wizard runs, with zero command-limit stalls. Exit-ready means alive one room before the hidden exit at Level 3, all three core encounters defeated, and both equipment slots filled. The provisional 50% regression floor proves no class is routinely blocked; the large class spread remains explicit Gate E evidence, not a final win-rate target.
 
 Build:
 
@@ -661,9 +661,9 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Playtest and merge the three-of-five event distribution, closing Slice 7.
-2. Close Slice 6 with deterministic class-readiness simulations.
-3. Resolve Gate E, then prototype the selected-hero, enemy-introduction, and exit-door interstitials for Slice 8.
+1. Review and merge the class-readiness simulation, closing Slice 6.
+2. Resolve Gate E's exit challenge, initial enemy roster, and Lost Soul decisions.
+3. Prototype the selected-hero, enemy-introduction, and exit-door interstitials for Slice 8.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed
