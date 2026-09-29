@@ -121,7 +121,7 @@ export function renderMapPrototype(
     (direction, index) => `${index + 1}${direction}`,
   );
   const choiceText = view.canUseItem
-    ? `${directionChoices.join('')}${directionChoices.length + 1}H`
+    ? `${directionChoices.join('')}${directionChoices.length + 1}I`
     : directionChoices.join(' ');
   return writeText(layout, choiceText, { row: 5, column: 0, width: 11 });
 }

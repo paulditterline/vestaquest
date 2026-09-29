@@ -69,6 +69,26 @@ describe('Gate C map grammar prototype', () => {
     ]);
   });
 
+  it('labels the compact map Item action with I rather than a direction-like H', () => {
+    const layout = renderMapPrototype('black', {
+      ...view,
+      heldItem: 'HEAL',
+      canUseItem: true,
+    });
+    expect(layout[5].slice(0, 10)).toEqual([
+      CHARACTER_CODE.ONE,
+      CHARACTER_CODE.N,
+      CHARACTER_CODE.TWO,
+      CHARACTER_CODE.E,
+      CHARACTER_CODE.THREE,
+      CHARACTER_CODE.S,
+      CHARACTER_CODE.FOUR,
+      CHARACTER_CODE.W,
+      CHARACTER_CODE.FIVE,
+      CHARACTER_CODE.I,
+    ]);
+  });
+
   it('rejects ambiguous or overflowing prototype state', () => {
     expect(() =>
       renderMapPrototype('black', {

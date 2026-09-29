@@ -486,7 +486,7 @@ export const TRAP_ROOM_EVENT: EventDefinition = Object.freeze({
   nodes: Object.freeze([
     Object.freeze({
       id: 'approach',
-      copy: Object.freeze(['A CACHE WAITS BEYOND']),
+      copy: Object.freeze(['A CACHE WAITS BEYOND', 'ONE MISSTEP CAN KILL']),
       choices: Object.freeze([
         Object.freeze({
           id: 'cross',

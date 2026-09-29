@@ -837,7 +837,7 @@ describe('authored dungeon events', () => {
       startNodeId: 'approach',
     });
     expect(approach).toMatchObject({
-      copy: ['A CACHE WAITS BEYOND'],
+      copy: ['A CACHE WAITS BEYOND', 'ONE MISSTEP CAN KILL'],
       choices: [
         {
           id: 'cross',

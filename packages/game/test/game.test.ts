@@ -13,8 +13,10 @@ import {
   getTopology,
   shortestRoomDistance,
   type EventId,
+  type ExitGuardianId,
   type GameCommand,
   type RunState,
+  type ScrollId,
 } from '../src/index.js';
 
 function choose(state: RunState, commandId: string, choiceId: string) {
@@ -286,7 +288,7 @@ function strangeHoleState(
   });
 }
 
-function escapeCrookedHalls(seed = 10): RunState {
+function reachCrookedHallsExit(seed = 10): RunState {
   let state = beginExploration(seed);
   for (const choiceId of [
     CHOICE_IDS.north,
@@ -313,6 +315,21 @@ function escapeCrookedHalls(seed = 10): RunState {
   return state;
 }
 
+function escapeCrookedHalls(seed = 10): RunState {
+  let state = reachCrookedHallsExit(seed);
+  state = accept(state, `bypass-${state.revision}`, CHOICE_IDS.exitBypass);
+  while (state.phase.kind === 'combat') {
+    const view = deriveView(state);
+    const action =
+      view.kind === 'loot-select'
+        ? CHOICE_IDS.equipLoot
+        : (view.choices.find((choice) => choice.id === CHOICE_IDS.smash)?.id ??
+          CHOICE_IDS.attack);
+    state = accept(state, `guardian-${state.revision}`, action);
+  }
+  return state;
+}
+
 function enterWizardCombat(): RunState {
   let state = beginExploration(10, CHOICE_IDS.wizard);
   state = accept(state, 'wizard-north', CHOICE_IDS.north);
@@ -325,6 +342,58 @@ function enterRogueCombat(): RunState {
   state = accept(state, 'rogue-north', CHOICE_IDS.north);
   state = accept(state, 'rogue-north-again', CHOICE_IDS.north);
   return accept(state, 'rogue-east', CHOICE_IDS.east);
+}
+
+function wizardGuardianCombat(
+  enemyId: ExitGuardianId,
+  currentHp: number,
+  scroll: ScrollId,
+): RunState {
+  const exit = reachCrookedHallsExit(10);
+  if (exit.phase.kind !== 'exit') throw new Error('Expected exit fixture.');
+  return Object.freeze({
+    ...exit,
+    rng: createRng(1),
+    phase: Object.freeze({
+      ...exit.phase,
+      kind: 'combat' as const,
+      heroClass: 'wizard' as const,
+      stats: Object.freeze({
+        level: 3,
+        hp: 4,
+        maximumHp: 4,
+        power: 9,
+        defense: 9,
+        skill: 3,
+        luck: 4,
+      }),
+      scrollPouch: Object.freeze([scroll]),
+      equipment: Object.freeze({ weapon: 'ash-wand' as const, armor: null }),
+      dungeon: Object.freeze({
+        ...exit.phase.dungeon,
+        exitGuardian: Object.freeze({
+          ...exit.phase.dungeon.exitGuardian,
+          enemyId,
+          currentHp,
+        }),
+      }),
+      encounterRoomId: exit.phase.dungeon.exitRoomId,
+      initiative: Object.freeze({
+        leftDie: 6,
+        leftModifier: 3,
+        leftTotal: 9,
+        rightDie: 1,
+        rightModifier: 2,
+        rightTotal: 3,
+      }),
+      initiativeWinner: 'hero' as const,
+      enemyHasActed: false,
+      smashUsed: false,
+      stealUsed: false,
+      menu: 'actions' as const,
+      pendingLoot: null,
+    }),
+  });
 }
 
 describe('map exploration game kernel', () => {
@@ -760,6 +829,48 @@ describe('map exploration game kernel', () => {
     ).toMatchObject({ currentHp: 1, status: 'active' });
   });
 
+  it('makes a successful Fireball heal a wounded Fire Demon by 1 HP', () => {
+    let state = wizardGuardianCombat('fire-demon', 1, 'fireball');
+    state = accept(state, 'open-fire-spell', CHOICE_IDS.spell);
+    const cast = choose(state, 'cast-fire-at-fire-demon', CHOICE_IDS.fireball);
+    expect(cast.status).toBe('accepted');
+    if (cast.status !== 'accepted' || cast.state.phase.kind !== 'combat') {
+      throw new Error('Expected the Fire Demon fight to continue.');
+    }
+    expect(cast.presentations[0]).toMatchObject({
+      purpose: 'spell',
+      prompt: 'WIZARD CASTS FIREBALL',
+      verdict: 'FIRE DEMON HEALS 1',
+    });
+    expect(cast.state.phase.dungeon.exitGuardian).toMatchObject({
+      enemyId: 'fire-demon',
+      currentHp: 2,
+      status: 'active',
+    });
+    expect(cast.state.phase.scrollPouch).toEqual([]);
+  });
+
+  it('lets Fireball exploit the Ice Demon weakness and complete the run', () => {
+    let state = wizardGuardianCombat('ice-demon', 3, 'fireball');
+    state = accept(state, 'open-ice-spell', CHOICE_IDS.spell);
+    const cast = choose(state, 'cast-fire-at-ice-demon', CHOICE_IDS.fireball);
+    expect(cast.status).toBe('accepted');
+    if (cast.status !== 'accepted') throw new Error('Expected Fireball cast.');
+    expect(cast.presentations).toMatchObject([
+      {
+        purpose: 'spell',
+        prompt: 'WIZARD CASTS FIREBALL',
+        verdict: 'WEAK! ICE DEMON SLAIN',
+      },
+    ]);
+    expect(cast.state.phase).toEqual({
+      kind: 'victory',
+      heroClass: 'wizard',
+      roomsFound: 10,
+      enemiesSlain: 4,
+    });
+  });
+
   it('lets a successful Stun skip the enemy response', () => {
     const entered = enterWizardCombat();
     if (entered.phase.kind !== 'combat') throw new Error('Expected combat.');
@@ -970,20 +1081,162 @@ describe('map exploration game kernel', () => {
     });
   });
 
-  it('ends the slice only when the secretly selected exit room is entered', () => {
-    const terminal = escapeCrookedHalls(10);
-    expect(terminal.phase).toEqual({
+  it('reveals the deterministic guardian when the hidden exit is entered', () => {
+    const exit = reachCrookedHallsExit(10);
+    expect(exit.phase).toMatchObject({
+      kind: 'exit',
+      heroClass: 'warrior',
+      enemiesSlain: 3,
+      dungeon: {
+        exitGuardian: {
+          roomId: 'L',
+          enemyId: 'fire-demon',
+          currentHp: 3,
+          status: 'active',
+          bypassAttempted: false,
+        },
+      },
+      retreatRoomId: 'K',
+    });
+    expect(deriveView(exit)).toMatchObject({
+      kind: 'exit',
+      heading: 'FIRE DEMON',
+      copy: ['THE LAST DOOR BURNS'],
+      choices: [
+        { id: CHOICE_IDS.exitFight, number: 1, label: 'FIGHT' },
+        { id: CHOICE_IDS.exitBypass, number: 2, label: 'FORCE' },
+        { id: CHOICE_IDS.exitRetreat, number: 3, label: 'RETREAT' },
+      ],
+    });
+  });
+
+  it('lets the hero retreat from the guardian and meet the same guardian again', () => {
+    let state = reachCrookedHallsExit(10);
+    state = accept(state, 'retreat-from-exit', CHOICE_IDS.exitRetreat);
+    expect(state.phase).toMatchObject({
+      kind: 'exploration',
+      dungeon: {
+        currentRoomId: 'K',
+        exitGuardian: {
+          enemyId: 'fire-demon',
+          currentHp: 3,
+          bypassAttempted: false,
+        },
+      },
+    });
+
+    state = accept(state, 'return-to-exit', CHOICE_IDS.south);
+    expect(deriveView(state)).toMatchObject({
+      kind: 'exit',
+      heading: 'FIRE DEMON',
+    });
+  });
+
+  it('starts ordinary persistent combat when the hero chooses Fight', () => {
+    const state = accept(
+      reachCrookedHallsExit(10),
+      'fight-the-guardian',
+      CHOICE_IDS.exitFight,
+    );
+    expect(state.phase).toMatchObject({
+      kind: 'combat',
+      encounterRoomId: 'L',
+      retreatRoomId: 'K',
+      dungeon: {
+        exitGuardian: { enemyId: 'fire-demon', currentHp: 3 },
+      },
+    });
+    expect(deriveView(state)).toMatchObject({
+      kind: 'combat',
+      enemyId: 'fire-demon',
+      enemyName: 'FIRE DEMON',
+      stealAvailable: false,
+    });
+  });
+
+  it('wins immediately on a successful bypass without counting a slain enemy', () => {
+    const exit = reachCrookedHallsExit(10);
+    const accepted = Array.from({ length: 100 }, (_, index) => {
+      const seeded = { ...exit, rng: createRng(index + 1) };
+      return choose(
+        seeded,
+        `successful-bypass-${index}`,
+        CHOICE_IDS.exitBypass,
+      );
+    }).find(
+      (result) =>
+        result.status === 'accepted' && result.state.phase.kind === 'victory',
+    );
+    expect(accepted?.status).toBe('accepted');
+    if (!accepted || accepted.status !== 'accepted') {
+      throw new Error('Expected a successful deterministic bypass fixture.');
+    }
+    expect(accepted.state.phase).toEqual({
       kind: 'victory',
       heroClass: 'warrior',
       roomsFound: 10,
       enemiesSlain: 3,
     });
-    expect(deriveView(terminal)).toMatchObject({
-      kind: 'victory',
-      heading: 'YOU ESCAPED!',
-      roomsFound: 10,
-      enemiesSlain: 3,
-      choices: [],
+    expect(accepted.presentations).toMatchObject([
+      {
+        kind: 'opposed-roll',
+        purpose: 'event',
+        prompt: 'FORCE THE GATE',
+        left: { name: 'WARRIOR', diceLabel: '2D6', modifierStat: 'P' },
+        right: { name: 'DANGER', diceLabel: 'D6', modifier: 5 },
+        verdict: 'THE WAY OPENS',
+      },
+    ]);
+  });
+
+  it('turns a failed bypass into combat and removes that bypass on re-entry', () => {
+    const exit = reachCrookedHallsExit(10);
+    const failed = Array.from({ length: 200 }, (_, index) => {
+      const seeded = { ...exit, rng: createRng(index + 1) };
+      return choose(seeded, `failed-bypass-${index}`, CHOICE_IDS.exitBypass);
+    }).find(
+      (result) =>
+        result.status === 'accepted' &&
+        result.state.phase.kind === 'combat' &&
+        result.state.phase.stats.hp >= 2,
+    );
+    expect(failed?.status).toBe('accepted');
+    if (
+      !failed ||
+      failed.status !== 'accepted' ||
+      failed.state.phase.kind !== 'combat'
+    ) {
+      throw new Error('Expected a failed deterministic bypass fixture.');
+    }
+    expect(failed.state.phase.dungeon.exitGuardian.bypassAttempted).toBe(true);
+    expect(failed.presentations?.[0]).toMatchObject({
+      purpose: 'event',
+      verdict: 'THE DEMON ATTACKS',
+    });
+
+    const escaped = Array.from({ length: 200 }, (_, index) => {
+      const seeded = { ...failed.state, rng: createRng(index + 1) };
+      return choose(seeded, `run-from-guardian-${index}`, CHOICE_IDS.run);
+    }).find(
+      (result) =>
+        result.status === 'accepted' &&
+        result.state.phase.kind === 'exploration',
+    );
+    expect(escaped?.status).toBe('accepted');
+    if (!escaped || escaped.status !== 'accepted') {
+      throw new Error('Expected a successful deterministic retreat fixture.');
+    }
+    const returned = accept(
+      escaped.state,
+      'return-after-failed-bypass',
+      CHOICE_IDS.south,
+    );
+    expect(deriveView(returned)).toMatchObject({
+      kind: 'exit',
+      choices: [
+        { id: CHOICE_IDS.exitFight, number: 1, label: 'FIGHT' },
+        { id: CHOICE_IDS.exitRetreat, number: 2, label: 'RETREAT' },
+      ],
     });
   });
 
@@ -1753,7 +2006,7 @@ describe('live Room of Blades event flow', () => {
     expect(deriveView(state)).toMatchObject({
       kind: 'event',
       heading: 'ROOM OF BLADES',
-      copy: ['A CACHE WAITS BEYOND'],
+      copy: ['A CACHE WAITS BEYOND', 'ONE MISSTEP CAN KILL'],
       choices: [
         { id: 'event.trap-room.cross', number: 1, label: 'CROSS' },
         { id: 'event.trap-room.leave', number: 2, label: 'LEAVE' },

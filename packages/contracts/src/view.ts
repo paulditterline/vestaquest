@@ -53,6 +53,7 @@ export const ControllerViewKindSchema = z.enum([
   'class-select',
   'exploration',
   'event',
+  'exit',
   'combat',
   'spell-select',
   'loot-select',

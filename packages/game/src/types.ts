@@ -1,12 +1,12 @@
 import type { RngState } from './rng.js';
 import type { HeroStats } from './balance.js';
-import type { EnemyId } from './balance.js';
+import type { EnemyId, EnemyName, ExitGuardianId } from './balance.js';
 import type { OpposedRoll } from './combat.js';
 import type { EventId } from './events.js';
 import type { Direction, RoomId } from './topology.js';
 
-export const GAME_STATE_VERSION = 11 as const;
-export const GAME_RULES_VERSION = 'event-distribution-v1' as const;
+export const GAME_STATE_VERSION = 12 as const;
+export const GAME_RULES_VERSION = 'hybrid-demon-exit-v1' as const;
 
 export const HERO_CLASSES = ['warrior', 'rogue', 'wizard'] as const;
 export type HeroClass = (typeof HERO_CLASSES)[number];
@@ -31,6 +31,9 @@ export const CHOICE_IDS = {
   equipLoot: 'loot.equip',
   leaveLoot: 'loot.leave',
   run: 'combat.run',
+  exitFight: 'exit.fight',
+  exitBypass: 'exit.bypass',
+  exitRetreat: 'exit.retreat',
 } as const;
 
 export type ChoiceId =
@@ -83,6 +86,16 @@ export interface DungeonRunState {
   readonly revealedDeadEndPositions: readonly string[];
   readonly encounters: readonly EncounterRunState[];
   readonly events: readonly DungeonEventRunState[];
+  readonly exitGuardian: ExitGuardianRunState;
+}
+
+export interface ExitGuardianRunState {
+  readonly roomId: RoomId;
+  readonly enemyId: ExitGuardianId;
+  readonly currentHp: number;
+  readonly status: 'active' | 'resolved';
+  readonly stealUsed: false;
+  readonly bypassAttempted: boolean;
 }
 
 export interface EncounterRunState {
@@ -156,6 +169,18 @@ export interface EventPhase {
   readonly screen: EventScreen;
 }
 
+export interface ExitPhase {
+  readonly kind: 'exit';
+  readonly heroClass: HeroClass;
+  readonly stats: HeroStats;
+  readonly consumable: 'healing-draught' | null;
+  readonly scrollPouch: ScrollPouch;
+  readonly equipment: Equipment;
+  readonly enemiesSlain: number;
+  readonly dungeon: DungeonRunState;
+  readonly retreatRoomId: RoomId;
+}
+
 export interface VictoryPhase {
   readonly kind: 'victory';
   readonly heroClass: HeroClass;
@@ -164,7 +189,13 @@ export interface VictoryPhase {
 }
 
 export type DeathCause =
-  'GHOUL' | 'SKELETON KNIGHT' | 'TRAPS' | 'THE CHAINS' | 'THE DARK';
+  | 'GHOUL'
+  | 'SKELETON KNIGHT'
+  | 'FIRE DEMON'
+  | 'ICE DEMON'
+  | 'TRAPS'
+  | 'THE CHAINS'
+  | 'THE DARK';
 
 export interface DeathPhase {
   readonly kind: 'death';
@@ -180,6 +211,7 @@ export type RunPhase =
   | ExplorationPhase
   | CombatPhase
   | EventPhase
+  | ExitPhase
   | VictoryPhase
   | DeathPhase;
 
@@ -271,6 +303,12 @@ export interface EventView extends BaseGameView {
   readonly copy: readonly string[];
 }
 
+export interface ExitView extends BaseGameView {
+  readonly kind: 'exit';
+  readonly heading: 'FIRE DEMON' | 'ICE DEMON';
+  readonly copy: readonly ['THE LAST DOOR BURNS' | 'THE LAST DOOR FREEZES'];
+}
+
 export interface CombatView extends BaseGameView {
   readonly kind: 'combat';
   readonly heroClass: HeroClass;
@@ -278,7 +316,7 @@ export interface CombatView extends BaseGameView {
   readonly hp: number;
   readonly maximumHp: number;
   readonly enemyId: EnemyId;
-  readonly enemyName: 'GHOUL' | 'SKELETON KNIGHT';
+  readonly enemyName: EnemyName;
   readonly enemyHp: number;
   readonly enemyMaximumHp: number;
   readonly smashAvailable: boolean;
@@ -289,7 +327,7 @@ export interface CombatView extends BaseGameView {
 
 export interface SpellSelectView extends BaseGameView {
   readonly kind: 'spell-select';
-  readonly enemyName: 'GHOUL' | 'SKELETON KNIGHT';
+  readonly enemyName: EnemyName;
   readonly scrolls: Readonly<Record<'FIREBALL' | 'LIGHTNING' | 'STUN', number>>;
 }
 
@@ -324,6 +362,7 @@ export type GameView =
   | ClassSelectView
   | ExplorationView
   | EventView
+  | ExitView
   | CombatView
   | SpellSelectView
   | LootSelectView
@@ -331,7 +370,7 @@ export type GameView =
   | DeathView;
 
 export type CombatantName =
-  'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT' | 'DANGER';
+  'WARRIOR' | 'ROGUE' | 'WIZARD' | EnemyName | 'DANGER';
 
 export type RollStat = 'P' | 'D' | 'S' | 'L' | 'X' | 'NONE';
 

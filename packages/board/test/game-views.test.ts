@@ -171,9 +171,9 @@ describe('semantic game-view renderers', () => {
     expect(snapshotLayout(layout)).toMatchSnapshot();
   });
 
-  it('renders the provisional exit outcome after the hidden room is found', () => {
+  it('renders the hybrid guardian choice after the hidden room is found', () => {
     const view = escapeView();
-    expect(view.kind).toBe('victory');
+    expect(view.kind).toBe('exit');
     const layout = renderGameView(view);
     expect(isFlagshipLayout(layout)).toBe(true);
     expect(snapshotLayout(layout)).toMatchSnapshot();

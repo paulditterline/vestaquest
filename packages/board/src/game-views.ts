@@ -4,6 +4,7 @@ import type {
   CombatView,
   DeathView,
   EventView,
+  ExitView,
   ExplorationView,
   GameChoice,
   GameView,
@@ -104,7 +105,7 @@ export function renderExplorationView(
   });
 }
 
-export function renderEventView(view: EventView): FlagshipLayout {
+export function renderEventView(view: EventView | ExitView): FlagshipLayout {
   const choices = requireNumberedChoices(view.choices, view.choices.length);
   if (
     view.heading.length < 1 ||
@@ -368,6 +369,8 @@ export function renderGameView(
     case 'exploration':
       return renderExplorationView(view, shell);
     case 'event':
+      return renderEventView(view);
+    case 'exit':
       return renderEventView(view);
     case 'combat':
       return renderCombatView(view, shell);

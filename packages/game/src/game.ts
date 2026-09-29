@@ -6,6 +6,8 @@ import {
   EQUIPMENT,
   HERO_STARTING_STATS,
   advanceHeroForRooms,
+  type EnemyName,
+  type OrdinaryEnemyId,
   type SpellAffinity,
 } from './balance.js';
 import {
@@ -29,6 +31,12 @@ import {
   rollEventCheck,
   type EventDestination,
 } from './events.js';
+import {
+  EXIT_BYPASS_DANGER,
+  exitBypassFor,
+  rollExitBypass,
+  selectExitGuardian,
+} from './exit.js';
 import {
   DIRECTIONS,
   MAP_SIZE,
@@ -55,6 +63,7 @@ import {
   type Equipment,
   type EquipmentItemId,
   type EventPhase,
+  type ExitPhase,
   type ExplorationPhase,
   type GameChoice,
   type GameCommand,
@@ -223,7 +232,11 @@ export function deriveView(state: RunState): GameView {
           label: 'SMASH',
         });
       }
-      if (state.phase.heroClass === 'rogue' && !state.phase.stealUsed) {
+      if (
+        state.phase.heroClass === 'rogue' &&
+        !state.phase.stealUsed &&
+        ENEMY_STEAL_LOOT[encounter.enemyId] !== undefined
+      ) {
         choices.push({
           id: CHOICE_IDS.steal,
           number: choices.length + 1,
@@ -271,7 +284,9 @@ export function deriveView(state: RunState): GameView {
         heldItem: state.phase.consumable === null ? null : 'HEAL',
         scrollsRemaining: state.phase.scrollPouch.length,
         stealAvailable:
-          state.phase.heroClass === 'rogue' && !state.phase.stealUsed,
+          state.phase.heroClass === 'rogue' &&
+          !state.phase.stealUsed &&
+          ENEMY_STEAL_LOOT[encounter.enemyId] !== undefined,
         choices: freezeChoices(choices),
       });
     }
@@ -332,6 +347,38 @@ export function deriveView(state: RunState): GameView {
             label: 'CONTINUE',
           },
         ]),
+      });
+    }
+    case 'exit': {
+      const guardian = state.phase.dungeon.exitGuardian;
+      const heading =
+        guardian.enemyId === 'fire-demon' ? 'FIRE DEMON' : 'ICE DEMON';
+      const bypass = exitBypassFor(state.phase.heroClass);
+      const choices: GameChoice[] = [
+        { id: CHOICE_IDS.exitFight, number: 1, label: 'FIGHT' },
+      ];
+      if (!guardian.bypassAttempted) {
+        choices.push({
+          id: CHOICE_IDS.exitBypass,
+          number: choices.length + 1,
+          label: bypass.label,
+        });
+      }
+      choices.push({
+        id: CHOICE_IDS.exitRetreat,
+        number: choices.length + 1,
+        label: 'RETREAT',
+      });
+      return Object.freeze({
+        ...base,
+        kind: 'exit',
+        heading,
+        copy: Object.freeze([
+          guardian.enemyId === 'fire-demon'
+            ? 'THE LAST DOOR BURNS'
+            : 'THE LAST DOOR FREEZES',
+        ] as const),
+        choices: freezeChoices(choices),
       });
     }
     case 'victory':
@@ -483,6 +530,11 @@ function transitionFromChoice(
         selected.exitRoomId,
         encounterRoomIds,
       );
+      const exitGuardianId = selectExitGuardian(
+        selected.topologyId,
+        selected.exitRoomId,
+      );
+      const exitGuardian = ENEMIES[exitGuardianId];
       const dungeon: DungeonRunState = Object.freeze({
         topologyId: selected.topologyId,
         exitRoomId: selected.exitRoomId,
@@ -504,6 +556,14 @@ function transitionFromChoice(
             Object.freeze({ ...event, status: 'active' as const }),
           ),
         ),
+        exitGuardian: Object.freeze({
+          roomId: selected.exitRoomId,
+          enemyId: exitGuardianId,
+          currentHp: exitGuardian.maximumHp,
+          status: 'active',
+          stealUsed: false,
+          bypassAttempted: false,
+        }),
       });
       return {
         phase: Object.freeze({
@@ -529,6 +589,8 @@ function transitionFromChoice(
       return transitionCombat(state.phase, choiceId, state.rng);
     case 'event':
       return transitionEvent(state.phase, choiceId, state.rng);
+    case 'exit':
+      return transitionExit(state.phase, choiceId, state.rng);
     case 'victory':
     case 'death':
       throw new Error('Terminal phases cannot transition.');
@@ -575,18 +637,6 @@ function move(
     phase.stats,
     visitedRoomIds.length,
   );
-  if (connection.roomId === phase.dungeon.exitRoomId) {
-    return {
-      phase: Object.freeze({
-        kind: 'victory',
-        heroClass: phase.heroClass,
-        roomsFound: visitedRoomIds.length,
-        enemiesSlain: phase.enemiesSlain,
-      }),
-      rng,
-    };
-  }
-
   const dungeon = Object.freeze({
     ...phase.dungeon,
     currentRoomId: connection.roomId,
@@ -597,6 +647,22 @@ function move(
     stats,
     dungeon,
   });
+  if (connection.roomId === phase.dungeon.exitRoomId) {
+    return {
+      phase: Object.freeze({
+        kind: 'exit',
+        heroClass: moved.heroClass,
+        stats: moved.stats,
+        consumable: moved.consumable,
+        scrollPouch: moved.scrollPouch,
+        equipment: moved.equipment,
+        enemiesSlain: moved.enemiesSlain,
+        dungeon: moved.dungeon,
+        retreatRoomId: phase.dungeon.currentRoomId,
+      }),
+      rng,
+    };
+  }
   const encounter = dungeon.encounters.find(
     (candidate) =>
       candidate.roomId === connection.roomId && candidate.status === 'active',
@@ -1009,15 +1075,98 @@ function returnFromEvent(phase: EventPhase): ExplorationPhase {
   });
 }
 
+function transitionExit(
+  phase: ExitPhase,
+  choiceId: ChoiceId,
+  rng: RunState['rng'],
+): TransitionResult {
+  if (choiceId === CHOICE_IDS.exitRetreat) {
+    return {
+      phase: Object.freeze({
+        kind: 'exploration',
+        heroClass: phase.heroClass,
+        stats: phase.stats,
+        consumable: phase.consumable,
+        scrollPouch: phase.scrollPouch,
+        equipment: phase.equipment,
+        enemiesSlain: phase.enemiesSlain,
+        dungeon: Object.freeze({
+          ...phase.dungeon,
+          currentRoomId: phase.retreatRoomId,
+        }),
+      }),
+      rng,
+    };
+  }
+  if (choiceId === CHOICE_IDS.exitFight) {
+    return enterCombat(
+      phase,
+      phase.retreatRoomId,
+      phase.dungeon.exitRoomId,
+      rng,
+    );
+  }
+  if (choiceId !== CHOICE_IDS.exitBypass) {
+    throw new Error(`Choice ${choiceId} is not an exit action.`);
+  }
+  if (phase.dungeon.exitGuardian.bypassAttempted) {
+    throw new Error('The exit bypass has already been attempted.');
+  }
+  const bypass = rollExitBypass(phase.heroClass, phase.stats, rng);
+  const statValue = phase.stats[bypass.definition.stat];
+  const presentation = createEventCheckPresentation({
+    heroClass: phase.heroClass,
+    stat: bypass.definition.stat,
+    statValue,
+    danger: EXIT_BYPASS_DANGER,
+    result: bypass.roll,
+    prompt: bypass.definition.prompt,
+    verdict: bypass.roll.succeeded ? 'THE WAY OPENS' : 'THE DEMON ATTACKS',
+  });
+  const attempted: ExitPhase = Object.freeze({
+    ...phase,
+    dungeon: Object.freeze({
+      ...phase.dungeon,
+      exitGuardian: Object.freeze({
+        ...phase.dungeon.exitGuardian,
+        bypassAttempted: true,
+      }),
+    }),
+  });
+  if (bypass.roll.succeeded) {
+    return {
+      phase: Object.freeze({
+        kind: 'victory',
+        heroClass: phase.heroClass,
+        roomsFound: phase.dungeon.visitedRoomIds.length,
+        enemiesSlain: phase.enemiesSlain,
+      }),
+      rng: bypass.roll.rng,
+      presentations: Object.freeze([presentation]),
+    };
+  }
+  const combat = enterCombat(
+    attempted,
+    phase.retreatRoomId,
+    phase.dungeon.exitRoomId,
+    bypass.roll.rng,
+  );
+  return {
+    ...combat,
+    presentations: Object.freeze([
+      presentation,
+      ...(combat.presentations ?? NO_PRESENTATIONS),
+    ]),
+  };
+}
+
 function enterCombat(
-  phase: ExplorationPhase,
+  phase: ExplorationPhase | ExitPhase,
   retreatRoomId: string,
   encounterRoomId: string,
   rng: RunState['rng'],
 ): TransitionResult {
-  const encounter = phase.dungeon.encounters.find(
-    (candidate) => candidate.roomId === encounterRoomId,
-  );
+  const encounter = findEncounter(phase.dungeon, encounterRoomId);
   if (!encounter || encounter.status !== 'active') {
     throw new Error('Cannot enter combat without an active encounter.');
   }
@@ -1202,6 +1351,8 @@ function resolveRogueSteal(
     throw new Error('Steal is not available.');
   }
   const encounter = activeEncounter(phase);
+  const lootId = ENEMY_STEAL_LOOT[encounter.enemyId];
+  if (!lootId) throw new Error('This enemy carries no stealable equipment.');
   const enemy = ENEMIES[encounter.enemyId];
   const unaware = phase.initiativeWinner === 'hero' && !phase.enemyHasActed;
   const result = rollSteal(rng, phase.stats.skill, enemy.skill, unaware);
@@ -1215,7 +1366,6 @@ function resolveRogueSteal(
     menu: 'actions',
     pendingLoot: null,
   });
-  const lootId = ENEMY_STEAL_LOOT[encounter.enemyId];
   const loot = EQUIPMENT[lootId];
   const presentation = makeRollPresentation({
     purpose: 'steal',
@@ -1419,18 +1569,23 @@ function resolveDamageSpell(
 ): TransitionResult {
   const encounter = activeEncounter(phase);
   const enemy = ENEMIES[encounter.enemyId];
-  const currentHp = Math.max(0, encounter.currentHp - damage);
+  const currentHp = Math.min(
+    enemy.maximumHp,
+    Math.max(0, encounter.currentHp - damage),
+  );
   const dungeon = updateEncounter(phase.dungeon, encounter.roomId, {
     currentHp,
     status: currentHp === 0 ? 'resolved' : 'active',
   });
   const finalPresentation =
-    currentHp === 0
-      ? Object.freeze({
-          ...presentation,
-          verdict: `${affinity === 'weak' ? 'WEAK! ' : ''}${rollDisplayName(enemy.name)} SLAIN`,
-        })
-      : presentation;
+    damage < 0 && currentHp === encounter.currentHp
+      ? Object.freeze({ ...presentation, verdict: 'SPELL ABSORBED' })
+      : currentHp === 0
+        ? Object.freeze({
+            ...presentation,
+            verdict: `${affinity === 'weak' ? 'WEAK! ' : ''}${rollDisplayName(enemy.name)} SLAIN`,
+          })
+        : presentation;
   if (currentHp === 0) {
     return resolveBattleLoot(phase, dungeon, rng, finalPresentation);
   }
@@ -1452,7 +1607,7 @@ function fireballDamage(
   affinity: SpellAffinity,
 ): number {
   if (rolledDamage === 0 || affinity === 'immune') return 0;
-  if (affinity === 'healed') return 0;
+  if (affinity === 'healed') return -1;
   if (affinity === 'weak') return 3;
   if (affinity === 'resistant') return 1;
   return 2;
@@ -1476,7 +1631,11 @@ function spellDamageVerdict(
   affinity: SpellAffinity,
 ): string {
   if (affinity === 'immune') return 'SPELL IMMUNE';
-  if (affinity === 'healed') return 'SPELL ABSORBED';
+  if (affinity === 'healed') {
+    return damage < 0
+      ? `${rollDisplayName(enemyName)} HEALS 1`
+      : 'SPELL ABSORBED';
+  }
   if (damage === 0) return `${rollDisplayName(enemyName)} BLOCKS`;
   if (affinity === 'weak') return `WEAK! HIT: ${damage}`;
   if (affinity === 'resistant') return `RESISTS! HIT: ${damage}`;
@@ -1604,12 +1763,26 @@ function resolveBattleLoot(
   presentation: GamePresentation,
 ): TransitionResult {
   const defeated = activeEncounter(phase);
-  const lootId = CLASS_BATTLE_LOOT[phase.heroClass][defeated.enemyId];
+  const enemiesSlain = phase.enemiesSlain + 1;
+  if (defeated.enemyId === 'fire-demon' || defeated.enemyId === 'ice-demon') {
+    return {
+      phase: Object.freeze({
+        kind: 'victory',
+        heroClass: phase.heroClass,
+        roomsFound: dungeon.visitedRoomIds.length,
+        enemiesSlain,
+      }),
+      rng,
+      presentations: Object.freeze([presentation]),
+    };
+  }
+  const ordinaryEnemyId: OrdinaryEnemyId = defeated.enemyId;
+  const lootId = CLASS_BATTLE_LOOT[phase.heroClass][ordinaryEnemyId];
   const loot = EQUIPMENT[lootId];
   const defeatedPhase: CombatPhase = Object.freeze({
     ...phase,
     dungeon,
-    enemiesSlain: phase.enemiesSlain + 1,
+    enemiesSlain,
     menu: 'loot',
     pendingLoot: lootId,
   });
@@ -1636,10 +1809,7 @@ function returnToExploration(phase: CombatPhase): ExplorationPhase {
   });
 }
 
-function deathFromEnemy(
-  phase: CombatPhase,
-  cause: 'GHOUL' | 'SKELETON KNIGHT',
-): RunPhase {
+function deathFromEnemy(phase: CombatPhase, cause: EnemyName): RunPhase {
   const topology = getTopology(phase.dungeon.topologyId);
   return Object.freeze({
     kind: 'death',
@@ -1680,13 +1850,18 @@ function activeEncounter(phase: CombatPhase) {
 }
 
 function combatEncounter(phase: CombatPhase) {
-  const encounter = phase.dungeon.encounters.find(
-    (candidate) => candidate.roomId === phase.encounterRoomId,
-  );
+  const encounter = findEncounter(phase.dungeon, phase.encounterRoomId);
   if (!encounter) {
     throw new Error('Combat phase requires an encounter.');
   }
   return encounter;
+}
+
+function findEncounter(dungeon: DungeonRunState, roomId: string) {
+  return (
+    dungeon.encounters.find((candidate) => candidate.roomId === roomId) ??
+    (dungeon.exitGuardian.roomId === roomId ? dungeon.exitGuardian : undefined)
+  );
 }
 
 function updateEncounter(
@@ -1701,6 +1876,16 @@ function updateEncounter(
     >
   >,
 ): DungeonRunState {
+  if (dungeon.exitGuardian.roomId === roomId) {
+    return Object.freeze({
+      ...dungeon,
+      exitGuardian: Object.freeze({
+        ...dungeon.exitGuardian,
+        currentHp: update.currentHp ?? dungeon.exitGuardian.currentHp,
+        status: update.status ?? dungeon.exitGuardian.status,
+      }),
+    });
+  }
   return Object.freeze({
     ...dungeon,
     encounters: Object.freeze(
@@ -1921,11 +2106,11 @@ function makeRollPresentation(
   input: Readonly<{
     purpose: 'initiative' | 'attack' | 'run' | 'spell' | 'steal';
     prompt: string;
-    leftName: 'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT';
+    leftName: Exclude<CombatantName, 'DANGER'>;
     leftStat: 'P' | 'D' | 'S';
     leftDiceLabel: 'D6' | '2D6';
     leftDice: readonly number[];
-    rightName: 'WARRIOR' | 'ROGUE' | 'WIZARD' | 'GHOUL' | 'SKELETON KNIGHT';
+    rightName: Exclude<CombatantName, 'DANGER'>;
     rightStat: 'P' | 'D' | 'S';
     rightDiceLabel: 'D6' | '2D6';
     rightDice: readonly number[];
