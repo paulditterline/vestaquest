@@ -253,6 +253,122 @@ describe('SqliteSessionRepository', () => {
     await restarted.close();
   });
 
+  it('persists exit choices and Demon combat views across restart', async () => {
+    const path = await databasePath();
+    const repository = new SqliteSessionRepository(path);
+    const sessionId = 'demon-session' as SessionId;
+    const session: StoredSession = {
+      sessionId,
+      state: createRun(1),
+      displayStatus: 'locked',
+      nextPresentationSequence: 3,
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    };
+    const intents: readonly PresentationIntent[] = [
+      {
+        id: 'exit-view-intent',
+        sessionId,
+        viewVersion: 0,
+        sequence: 0,
+        isStable: true,
+        status: 'delivered',
+        payload: {
+          kind: 'game-view',
+          view: {
+            id: 'exit-view',
+            revision: 0,
+            kind: 'exit',
+            heading: 'FIRE DEMON',
+            copy: ['THE LAST DOOR BURNS'],
+            choices: [
+              { id: 'exit.fight', number: 1, label: 'FIGHT' },
+              { id: 'exit.bypass', number: 2, label: 'BANISH' },
+              { id: 'exit.retreat', number: 3, label: 'RETREAT' },
+            ],
+          },
+        },
+      },
+      {
+        id: 'demon-combat-intent',
+        sessionId,
+        viewVersion: 0,
+        sequence: 1,
+        isStable: true,
+        status: 'pending',
+        payload: {
+          kind: 'game-view',
+          view: {
+            id: 'demon-combat',
+            revision: 0,
+            kind: 'combat',
+            heroClass: 'wizard',
+            level: 3,
+            hp: 4,
+            maximumHp: 4,
+            enemyId: 'fire-demon',
+            enemyName: 'FIRE DEMON',
+            enemyHp: 3,
+            enemyMaximumHp: 3,
+            smashAvailable: false,
+            heldItem: 'HEAL',
+            scrollsRemaining: 3,
+            stealAvailable: false,
+            choices: [
+              { id: 'combat.attack', number: 1, label: 'ATTACK' },
+              { id: 'combat.spell', number: 2, label: 'SPELL' },
+              { id: 'action.item', number: 3, label: 'ITEM' },
+              { id: 'combat.run', number: 4, label: 'RUN' },
+            ],
+          },
+        },
+      },
+      {
+        id: 'demon-death-intent',
+        sessionId,
+        viewVersion: 0,
+        sequence: 2,
+        isStable: true,
+        status: 'pending',
+        payload: {
+          kind: 'game-view',
+          view: {
+            id: 'demon-death',
+            revision: 0,
+            kind: 'death',
+            heroClass: 'wizard',
+            heading: 'YOU DIED',
+            cause: 'FIRE DEMON',
+            roomsFound: 10,
+            enemiesSlain: 3,
+            roomsUntilExit: 0,
+            choices: [],
+          },
+        },
+      },
+    ];
+    await repository.create(session, intents);
+    await repository.close();
+
+    const restarted = new SqliteSessionRepository(path);
+    expect(await restarted.listPresentationIntents(sessionId)).toMatchObject([
+      { payload: { kind: 'game-view', view: { kind: 'exit' } } },
+      {
+        payload: {
+          kind: 'game-view',
+          view: { kind: 'combat', enemyId: 'fire-demon' },
+        },
+      },
+      {
+        payload: {
+          kind: 'game-view',
+          view: { kind: 'death', cause: 'FIRE DEMON' },
+        },
+      },
+    ]);
+    await restarted.close();
+  });
+
   it('replays a Wizard encounter and its Spell choice after restart', async () => {
     const path = await databasePath();
     const repository = new SqliteSessionRepository(path);

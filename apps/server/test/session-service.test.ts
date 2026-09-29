@@ -161,13 +161,22 @@ describe('SessionService creation and presentation state', () => {
       CHOICE_IDS.north,
       CHOICE_IDS.east,
       CHOICE_IDS.south,
+      CHOICE_IDS.exitBypass,
     ];
     let terminal;
     let commandIndex = 0;
-    while (route.length > 0) {
+    while (
+      route.length > 0 ||
+      terminal?.kind !== 'response' ||
+      terminal.response.view.kind !== 'victory'
+    ) {
       const stored = await repository.get(sessionId);
       if (!stored) throw new Error('Missing stored session.');
       const gameView = deriveView(stored.state);
+      if (gameView.kind === 'death') {
+        throw new Error('Expected the exit fixture to survive.');
+      }
+      if (gameView.kind === 'victory') break;
       const desiredChoice =
         gameView.kind === 'loot-select'
           ? CHOICE_IDS.equipLoot

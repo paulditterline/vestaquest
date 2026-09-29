@@ -240,7 +240,9 @@ function chooseTacticalAction(
       ({ roomId }) => roomId === phase.encounterRoomId,
     );
     if (!encounter) throw new Error('Simulation combat encounter is missing.');
-    const slot = EQUIPMENT[ENEMY_STEAL_LOOT[encounter.enemyId]].slot;
+    const lootId = ENEMY_STEAL_LOOT[encounter.enemyId];
+    if (lootId === undefined) return CHOICE_IDS.attack;
+    const slot = EQUIPMENT[lootId].slot;
     if (phase.equipment[slot] === null) return CHOICE_IDS.steal;
   }
   if (
@@ -340,6 +342,10 @@ function summarizeClass(
     'SKELETON KNIGHT': deaths.filter(
       ({ deathCause }) => deathCause === 'SKELETON KNIGHT',
     ).length,
+    'FIRE DEMON': deaths.filter(({ deathCause }) => deathCause === 'FIRE DEMON')
+      .length,
+    'ICE DEMON': deaths.filter(({ deathCause }) => deathCause === 'ICE DEMON')
+      .length,
     TRAPS: deaths.filter(({ deathCause }) => deathCause === 'TRAPS').length,
     'THE CHAINS': deaths.filter(({ deathCause }) => deathCause === 'THE CHAINS')
       .length,

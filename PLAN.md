@@ -1,8 +1,8 @@
 # VestaQuest implementation plan
 
-Status: Slices 0–5 and 7 complete and merged; Slice 6 closure pending simulation review
+Status: Slices 0–7 and Gates A–E complete and merged; Slice 8 active
 
-Last updated: 2026-09-13
+Last updated: 2026-09-29
 
 Target hardware: Vestaboard Flagship, 6 rows by 22 columns
 
@@ -23,7 +23,7 @@ A successful run should feel like a strange mechanical object in the room is run
 - Every board update earns the noise, delay, and physical wear it causes.
 - Runs are short enough to finish in one sitting, targeting roughly ten meaningful locations on the successful path.
 - The objective is always to find and escape through the exit, but classes, discoveries, equipment, and decisions create different routes through that objective.
-- Failure erases the run. What persists is player knowledge, plus a possible Lost Soul echo whose exact rules remain a later decision.
+- Failure erases the run's power. A later Lost Soul may remember only the failed hero's class and cause of death; it returns no old equipment.
 
 ## 3. Release definitions
 
@@ -167,7 +167,8 @@ restoring 1 HP) and Skeleton Knight (`HP3 P4 D4 S2`, relying on armor rather
 than an additional special rule). Late-dungeon elites are Fire Demon
 (`HP3 P5 D3 S4`; Fireball heals, weak to Lightning) and Ice Demon
 (`HP3 P4 D4 S2`; weak to Fireball, resists Lightning). Stun affects both
-normally. Lost Soul remains a later Gate E design.
+normally. The approved Lost Soul remembers the most recent failed hero's class
+and cause of death, appears off the critical route, and returns no old gear.
 The Wizard has a three-slot scroll pouch starting with Fireball, Lightning, and
 Stun. Every class starts with a one-slot Healing Draught restoring 2 HP. It may
 be used as a turn in combat or as a context-sensitive map choice with no enemy
@@ -184,13 +185,13 @@ The first values are hypotheses. Automated seed runs and physical play sessions 
 
 ### Gate E — content semantics, before content beta
 
-Resolve the consequences with cross-run or trust implications:
+Resolved by the owner on 2026-09-14:
 
-- What exactly the Lost Soul remembers and whether it can return old equipment.
-- Whether instant death exists in trap tables, and what readable warning makes it fair.
-- Truth rules for exit clues and deception.
-- Whether every run has a final boss or selects among fight, choice, and hybrid exit guardians.
-- Autoplay policy, cadence, and stop conditions.
+- Lost Soul remembers the prior failed hero's class and cause of death, appears off the selected critical route, and never returns old equipment.
+- Room of Blades retains its raw 1 versus 6 instant death and warns `ONE MISSTEP CAN KILL` before the choice.
+- Successful clues are always truthful; any later unreliable clue must identify its doubt on the board.
+- Every run has a deterministic Fire or Ice Demon hybrid guardian with `FIGHT`, a class-specific bypass, and `RETREAT`. Failed bypass begins combat and cannot make the run unwinnable.
+- Autoplay is lightly weighted and class-aware, uses ordinary cadence, respects Quiet Hours, stops after one terminal run, and has a hard command limit.
 
 ### Gate F — public distribution, before marketplace architecture
 
@@ -528,6 +529,8 @@ Branch: `codex/class-readiness-simulation`
 
 Status: **Active; closure simulation complete pending owner review**. The first playable feature implements the Wizard's three-scroll pouch, spell submenu, Fireball/Lightning/Stun resolution, initial Ghoul and Skeleton Knight affinities, exact board views, persistence, and controller flow. Automated verification and owner Board Lab review passed on 2026-08-12. Rogue Steal/Unaware and its first enemy-specific equipment rewards also passed owner Board Lab review on 2026-08-12. Ordinary class-specific weapon/armor rewards after victories passed owner physical review on 2026-08-23, including safe post-combat continuation and the empty-slot Iron Sword and Chain Mail Equip flows. The owner also physically approved replacing the opposed-roll solid color tracks with four period characters on 2026-08-23. A 3,000-run deterministic shortest-route probe on 2026-09-13 reached an exit-ready state in 99.8% of Warrior runs, 64.4% of Rogue runs, and 80.1% of Wizard runs, with zero command-limit stalls. Exit-ready means alive one room before the hidden exit at Level 3, all three core encounters defeated, and both equipment slots filled. The provisional 50% regression floor proves no class is routinely blocked; the large class spread remains explicit Gate E evidence, not a final win-rate target.
 
+Closure update: **Complete and merged on 2026-09-14** after owner approval of the simulation evidence.
+
 Build:
 
 - Rogue Steal/Unaware timing.
@@ -549,6 +552,8 @@ Acceptance:
 Branch: `codex/event-distribution`
 
 Status: **Complete pending merge**. The event foundation defines and validates finite authored graphs with one-to-four numbered choices, immediate or visible opposed-check branches, margin/catastrophe outcomes, explicit terminal outcomes, truth-tagged transient clues, exact 6x22 event views, controller contracts, and restart-safe presentation intents. The approved Solid Door passed owner Board Lab review on 2026-08-24, including its eligible cache, correct combined level/equipment stats, and no retrigger after backtracking. Room of Blades uses `D6 + SKILL` versus `D6 + DANGER 3`; ties fail, ordinary failure deals 1 HP, failure by 3+ deals 2 HP, raw player `1` versus Danger `6` causes instant death, and success opens the shared eligible cache. Its success, cache/equip, combined-stat, persistence, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-08-26 with a Level 3 Rogue and Shadow Knife. Ancient Library uses Wizard keep-high `POWER` versus `DANGER 4`, scroll/healing/dead-words success rewards, and a persistent Skeleton Knight ambush on failure. Its Wizard success, replacement-scroll, persistence, combined-stat, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-08-26; the ambush branch remains automated-test verified. Chained Prisoner uses class-neutral raw opposed rolls: Free is `2D6` keep-high versus `D6`, ties succeeding, with a 1 HP chain wound on failure; Question is `D6` versus `D6`, ties failing, with a harmless failure. Either success gives a transient truthful shortest-path direction to the hidden exit. Its Question success, truthful clue, Leave persistence, and resolved-room no-retrigger flows passed owner Board Lab review on 2026-09-13; the Free injury/death branches remain automated-test verified. Strange Hole offers Luck-based Look for truthful direction information or a harder Skill-based Reach for the shared cache; a failed Reach deals 1 HP and can kill with cause `THE DARK`. Its Look success, truthful clue, board presentation, and pacing passed owner Board Lab review on 2026-09-13; the Reach/cache/injury branches remain automated-test verified. The owner closed the private-alpha roster at these five events on 2026-09-13. Each run now selects exactly three deterministically from its topology and hidden exit, independently of class, and places as many as possible off the selected shortest route before maximizing graph spacing. Catalog tests cover every topology/exit combination, enforce three unique noncombat rooms with at least two graph moves between events, and measure a 4.67-move average minimum spacing. A complete owner Board Lab run approved the resulting event density on 2026-09-13. Call for Help, Fresh Bread, and Loved-One Apparition are deferred to content beta.
+
+Closure update: **Complete and merged on 2026-09-14**.
 
 Build:
 
@@ -572,6 +577,8 @@ Acceptance:
 Branch: `codex/complete-run-content`
 
 Gate: E
+
+Status: **Active**. The approved hybrid Demon exit—deterministic Fire/Ice selection independent of class, direct combat, one class-specific keep-high bypass against provisional Danger 5, retreat, persistent failed-bypass combat, and terminal victory—passed owner Board Lab review on 2026-09-29. The owner confirmed Demon persistence after retreat/re-entry and completed a Rogue `SLIP` victory. Failed-bypass combat and guardian HP persistence after Run remain automated-test verified. Pixel-art interstitials remain the next separate physical-review step.
 
 Build:
 
@@ -661,8 +668,8 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Review and merge the class-readiness simulation, closing Slice 6.
-2. Resolve Gate E's exit challenge, initial enemy roster, and Lost Soul decisions.
+1. Physically review and merge the hybrid Fire/Ice Demon exit flow.
+2. Implement and review the approved Lost Soul semantics without cross-run gear recovery.
 3. Prototype the selected-hero, enemy-introduction, and exit-door interstitials for Slice 8.
 
 The order remains physical-first: close the full controller-to-board loop, agree

@@ -18,16 +18,20 @@ export type HeroStats = Readonly<{
   luck: number;
 }>;
 
-export type EnemyId = 'ghoul' | 'skeleton-knight';
+export type OrdinaryEnemyId = 'ghoul' | 'skeleton-knight';
+export type ExitGuardianId = 'fire-demon' | 'ice-demon';
+export type EnemyId = OrdinaryEnemyId | ExitGuardianId;
+export type EnemyName =
+  'GHOUL' | 'SKELETON KNIGHT' | 'FIRE DEMON' | 'ICE DEMON';
 
 export type EnemyDefinition = Readonly<{
   id: EnemyId;
-  name: 'GHOUL' | 'SKELETON KNIGHT';
+  name: EnemyName;
   maximumHp: number;
   power: number;
   defense: number;
   skill: number;
-  trait: 'feed' | 'armored';
+  trait: 'feed' | 'armored' | 'elemental';
   spellAffinities: Readonly<Record<ScrollId, SpellAffinity>>;
 }>;
 
@@ -104,11 +108,12 @@ export const EQUIPMENT: Readonly<Record<EquipmentItemId, EquipmentDefinition>> =
     }),
   });
 
-export const ENEMY_STEAL_LOOT: Readonly<Record<EnemyId, EquipmentItemId>> =
-  Object.freeze({
-    ghoul: 'ghoul-fang',
-    'skeleton-knight': 'bone-mail',
-  });
+export const ENEMY_STEAL_LOOT: Readonly<
+  Partial<Record<EnemyId, EquipmentItemId>>
+> = Object.freeze({
+  ghoul: 'ghoul-fang',
+  'skeleton-knight': 'bone-mail',
+});
 
 export const CLASS_EQUIPMENT: Readonly<
   Record<HeroClass, Readonly<Record<EquipmentSlot, EquipmentItemId>>>
@@ -119,7 +124,7 @@ export const CLASS_EQUIPMENT: Readonly<
 });
 
 export const CLASS_BATTLE_LOOT: Readonly<
-  Record<HeroClass, Readonly<Record<EnemyId, EquipmentItemId>>>
+  Record<HeroClass, Readonly<Record<OrdinaryEnemyId, EquipmentItemId>>>
 > = Object.freeze({
   warrior: Object.freeze({
     ghoul: 'iron-sword',
@@ -193,6 +198,34 @@ export const ENEMIES: Readonly<Record<EnemyId, EnemyDefinition>> =
       spellAffinities: Object.freeze({
         fireball: 'resistant',
         lightning: 'weak',
+        stun: 'normal',
+      }),
+    }),
+    'fire-demon': Object.freeze({
+      id: 'fire-demon',
+      name: 'FIRE DEMON',
+      maximumHp: 3,
+      power: 5,
+      defense: 3,
+      skill: 4,
+      trait: 'elemental',
+      spellAffinities: Object.freeze({
+        fireball: 'healed',
+        lightning: 'weak',
+        stun: 'normal',
+      }),
+    }),
+    'ice-demon': Object.freeze({
+      id: 'ice-demon',
+      name: 'ICE DEMON',
+      maximumHp: 3,
+      power: 4,
+      defense: 4,
+      skill: 2,
+      trait: 'elemental',
+      spellAffinities: Object.freeze({
+        fireball: 'weak',
+        lightning: 'resistant',
         stun: 'normal',
       }),
     }),

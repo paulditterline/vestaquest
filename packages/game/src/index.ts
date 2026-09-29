@@ -21,9 +21,12 @@ export {
 export type {
   EnemyDefinition,
   EnemyId,
+  EnemyName,
   EquipmentDefinition,
   EquipmentSlot,
+  ExitGuardianId,
   HeroStats,
+  OrdinaryEnemyId,
   SpellAffinity,
 } from './balance.js';
 export {
@@ -47,6 +50,13 @@ export type {
 } from './combat.js';
 export { placeCoreEncounters, shortestRoomPath } from './encounters.js';
 export type { EncounterPlacement, PlacedEncounter } from './encounters.js';
+export {
+  EXIT_BYPASS_DANGER,
+  exitBypassFor,
+  rollExitBypass,
+  selectExitGuardian,
+} from './exit.js';
+export type { ExitBypassDefinition, ExitBypassResult } from './exit.js';
 export {
   AUTHORED_EVENTS,
   CHAINED_PRISONER_EVENT,
@@ -125,6 +135,9 @@ export type {
   EventView,
   EventPhase,
   EventScreen,
+  ExitGuardianRunState,
+  ExitPhase,
+  ExitView,
   ExplorationPhase,
   ExplorationView,
   GameChoice,

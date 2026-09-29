@@ -448,6 +448,7 @@ function parseAcceptedCommand(value: unknown): AcceptedCommandEntry {
       'exploration',
       'combat',
       'event',
+      'exit',
       'victory',
       'death',
     ] as const),
@@ -618,6 +619,8 @@ function parseRollSide(value: unknown): OpposedRollPresentation['left'] {
       'WIZARD',
       'GHOUL',
       'SKELETON KNIGHT',
+      'FIRE DEMON',
+      'ICE DEMON',
       'DANGER',
     ] as const),
     diceLabel,
@@ -641,6 +644,7 @@ function parseGameView(value: unknown): GameView {
     'class-select',
     'exploration',
     'event',
+    'exit',
     'combat',
     'spell-select',
     'loot-select',
@@ -767,6 +771,47 @@ function parseGameView(value: unknown): GameView {
       }
       return Object.freeze({ ...base, kind, heading, copy });
     }
+    case 'exit': {
+      requireKeys(view, [
+        'id',
+        'revision',
+        'choices',
+        'kind',
+        'heading',
+        'copy',
+      ]);
+      const heading = requireEnum(view.heading, [
+        'FIRE DEMON',
+        'ICE DEMON',
+      ] as const);
+      const expectedCopy =
+        heading === 'FIRE DEMON'
+          ? 'THE LAST DOOR BURNS'
+          : 'THE LAST DOOR FREEZES';
+      if (
+        !Array.isArray(view.copy) ||
+        !isDeepStrictEqual(view.copy, [expectedCopy]) ||
+        (choices.length !== 2 && choices.length !== 3) ||
+        choices[0]?.id !== 'exit.fight' ||
+        choices[0]?.number !== 1 ||
+        choices[0]?.label !== 'FIGHT' ||
+        choices.at(-1)?.id !== 'exit.retreat' ||
+        choices.at(-1)?.number !== choices.length ||
+        choices.at(-1)?.label !== 'RETREAT' ||
+        (choices.length === 3 &&
+          (choices[1]?.id !== 'exit.bypass' ||
+            choices[1]?.number !== 2 ||
+            !['FORCE', 'SLIP', 'BANISH'].includes(choices[1]?.label ?? '')))
+      ) {
+        throw new PersistenceCorruptionError('exit view');
+      }
+      return Object.freeze({
+        ...base,
+        kind,
+        heading,
+        copy: Object.freeze([expectedCopy] as const),
+      });
+    }
     case 'combat': {
       requireKeys(view, [
         'id',
@@ -789,14 +834,20 @@ function parseGameView(value: unknown): GameView {
       const enemyId = requireEnum(view.enemyId, [
         'ghoul',
         'skeleton-knight',
+        'fire-demon',
+        'ice-demon',
       ] as const);
       const enemyName = requireEnum(view.enemyName, [
         'GHOUL',
         'SKELETON KNIGHT',
+        'FIRE DEMON',
+        'ICE DEMON',
       ] as const);
       if (
         (enemyId === 'ghoul' && enemyName !== 'GHOUL') ||
         (enemyId === 'skeleton-knight' && enemyName !== 'SKELETON KNIGHT') ||
+        (enemyId === 'fire-demon' && enemyName !== 'FIRE DEMON') ||
+        (enemyId === 'ice-demon' && enemyName !== 'ICE DEMON') ||
         choices.length < 2 ||
         choices.length > 4 ||
         choices.some((choice, index) => choice.number !== index + 1)
@@ -847,6 +898,8 @@ function parseGameView(value: unknown): GameView {
       const enemyName = requireEnum(view.enemyName, [
         'GHOUL',
         'SKELETON KNIGHT',
+        'FIRE DEMON',
+        'ICE DEMON',
       ] as const);
       const scrolls = requireExactObject(view.scrolls, [
         'FIREBALL',
@@ -988,6 +1041,8 @@ function parseGameView(value: unknown): GameView {
         cause: requireEnum(view.cause, [
           'GHOUL',
           'SKELETON KNIGHT',
+          'FIRE DEMON',
+          'ICE DEMON',
           'TRAPS',
           'THE CHAINS',
           'THE DARK',
@@ -1047,6 +1102,9 @@ function parseChoiceId(value: unknown): ChoiceId {
     'spell.cancel',
     'loot.equip',
     'loot.leave',
+    'exit.fight',
+    'exit.bypass',
+    'exit.retreat',
   ] as const);
 }
 
