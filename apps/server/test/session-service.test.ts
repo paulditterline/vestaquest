@@ -119,17 +119,25 @@ describe('SessionService creation and presentation state', () => {
 
     const intents = await repository.listPresentationIntents(sessionId);
     expect(
-      intents.slice(-5).map(({ isStable, payload }) => ({
+      intents.slice(-6).map(({ isStable, payload }) => ({
         isStable,
         kind: payload.kind,
       })),
     ).toEqual([
+      { isStable: false, kind: 'enemy-splash' },
       { isStable: false, kind: 'roll-scaffold' },
       { isStable: false, kind: 'roll-result' },
       { isStable: false, kind: 'roll-scaffold' },
       { isStable: false, kind: 'roll-result' },
       { isStable: true, kind: 'game-view' },
     ]);
+    expect(intents.at(-6)?.payload).toMatchObject({
+      kind: 'enemy-splash',
+      presentation: {
+        enemyId: 'ghoul',
+        enemyName: 'GHOUL',
+      },
+    });
     expect(intents.at(-5)?.payload).toMatchObject({
       presentation: {
         purpose: 'initiative',

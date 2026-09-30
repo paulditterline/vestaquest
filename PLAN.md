@@ -578,7 +578,7 @@ Branch: `codex/complete-run-content`
 
 Gate: E
 
-Status: **Active**. The approved hybrid Demon exit—deterministic Fire/Ice selection independent of class, direct combat, one class-specific keep-high bypass against provisional Danger 5, retreat, persistent failed-bypass combat, and terminal victory—passed owner Board Lab review on 2026-09-29. The owner confirmed Demon persistence after retreat/re-entry and completed a Rogue `SLIP` victory. Failed-bypass combat and guardian HP persistence after Run remain automated-test verified. Pixel-art interstitials remain the next separate physical-review step.
+Status: **Active**. The approved hybrid Demon exit—deterministic Fire/Ice selection independent of class, direct combat, one class-specific keep-high bypass against provisional Danger 5, retreat, persistent failed-bypass combat, and terminal victory—passed owner Board Lab review on 2026-09-29. The owner confirmed Demon persistence after retreat/re-entry and completed a Rogue `SLIP` victory. Failed-bypass combat and guardian HP persistence after Run remain automated-test verified. The owner approved the Ghoul, Skeleton Knight, Fire Demon, and Ice Demon splash compositions on 2026-09-29, with `!` after each enemy name. Their live pre-initiative sequence awaits final Board Lab review; selected-hero and victory-door art remain later Slice 8 work.
 
 Build:
 
@@ -668,9 +668,9 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Physically review and merge the hybrid Fire/Ice Demon exit flow.
+1. Physically review and merge the live pre-initiative enemy splash sequence.
 2. Implement and review the approved Lost Soul semantics without cross-run gear recovery.
-3. Prototype the selected-hero, enemy-introduction, and exit-door interstitials for Slice 8.
+3. Prototype the selected-hero and exit-door interstitials for Slice 8.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed

@@ -1,6 +1,7 @@
 import {
   renderGameView,
   renderCombatNotice,
+  renderEnemySplash,
   renderOpposedRollResult,
   renderOpposedRollScaffold,
   renderTitlePresentation,
@@ -130,6 +131,11 @@ export class PresentationCoordinator {
         return renderOpposedRollResult(intent.payload.presentation);
       case 'combat-notice':
         return renderCombatNotice(intent.payload.presentation, this.#shell);
+      case 'enemy-splash':
+        return renderEnemySplash(
+          intent.payload.presentation.enemyId,
+          this.#shell,
+        );
       case 'game-view':
         return renderGameView(intent.payload.view, this.#shell);
     }

@@ -656,6 +656,11 @@ describe('map exploration game kernel', () => {
     if (entered.status !== 'accepted') throw new Error('Expected encounter.');
     expect(entered.presentations).toMatchObject([
       {
+        kind: 'enemy-splash',
+        enemyId: 'ghoul',
+        enemyName: 'GHOUL',
+      },
+      {
         kind: 'opposed-roll',
         purpose: 'initiative',
         prompt: 'ROLL FOR INITIATIVE',
@@ -1133,12 +1138,16 @@ describe('map exploration game kernel', () => {
   });
 
   it('starts ordinary persistent combat when the hero chooses Fight', () => {
-    const state = accept(
-      reachCrookedHallsExit(10),
-      'fight-the-guardian',
-      CHOICE_IDS.exitFight,
-    );
-    expect(state.phase).toMatchObject({
+    const exit = reachCrookedHallsExit(10);
+    const result = choose(exit, 'fight-the-guardian', CHOICE_IDS.exitFight);
+    expect(result.status).toBe('accepted');
+    if (result.status !== 'accepted') return;
+    expect(result.presentations[0]).toMatchObject({
+      kind: 'enemy-splash',
+      enemyId: 'fire-demon',
+      enemyName: 'FIRE DEMON',
+    });
+    expect(result.state.phase).toMatchObject({
       kind: 'combat',
       encounterRoomId: 'L',
       retreatRoomId: 'K',
@@ -1146,7 +1155,7 @@ describe('map exploration game kernel', () => {
         exitGuardian: { enemyId: 'fire-demon', currentHp: 3 },
       },
     });
-    expect(deriveView(state)).toMatchObject({
+    expect(deriveView(result.state)).toMatchObject({
       kind: 'combat',
       enemyId: 'fire-demon',
       enemyName: 'FIRE DEMON',
@@ -1567,6 +1576,11 @@ describe('live Ancient Library event flow', () => {
       verdict: 'THE SHELVES AWAKEN',
     });
     expect(failure.presentations[1]).toMatchObject({
+      kind: 'enemy-splash',
+      enemyId: 'skeleton-knight',
+      enemyName: 'SKELETON KNIGHT',
+    });
+    expect(failure.presentations[2]).toMatchObject({
       purpose: 'initiative',
       right: { name: 'SKELETON KNIGHT' },
     });

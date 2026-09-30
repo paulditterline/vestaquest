@@ -12,6 +12,7 @@ import {
   type AcceptedCommandEntry,
   type ChoiceId,
   type CombatNoticePresentation,
+  type EnemySplashPresentation,
   type GamePresentation,
   type GameView,
   type MapViewGrid,
@@ -504,6 +505,14 @@ function parsePresentationPayload(json: string): PresentationPayload {
     }
     return Object.freeze({ kind: payload.kind, presentation });
   }
+  if (payload.kind === 'enemy-splash') {
+    requireKeys(payload, ['kind', 'presentation']);
+    const presentation = parseGamePresentation(payload.presentation);
+    if (presentation.kind !== 'enemy-splash') {
+      throw new PersistenceCorruptionError('enemy splash presentation');
+    }
+    return Object.freeze({ kind: payload.kind, presentation });
+  }
   if (payload.kind !== 'game-view') {
     throw new PersistenceCorruptionError('presentation payload');
   }
@@ -517,6 +526,7 @@ function parsePresentationPayload(json: string): PresentationPayload {
 function parseGamePresentation(value: unknown): GamePresentation {
   const kind = requireRecord(value).kind;
   if (kind === 'combat-notice') return parseCombatNotice(value);
+  if (kind === 'enemy-splash') return parseEnemySplash(value);
   const presentation = requireExactObject(value, [
     'kind',
     'purpose',
@@ -551,6 +561,38 @@ function parseGamePresentation(value: unknown): GamePresentation {
     right: parseRollSide(presentation.right),
     verdict,
   });
+}
+
+function parseEnemySplash(value: unknown): EnemySplashPresentation {
+  const presentation = requireExactObject(value, [
+    'kind',
+    'enemyId',
+    'enemyName',
+  ]);
+  if (presentation.kind !== 'enemy-splash') {
+    throw new PersistenceCorruptionError('enemy splash');
+  }
+  const enemyId = requireEnum(presentation.enemyId, [
+    'ghoul',
+    'skeleton-knight',
+    'fire-demon',
+    'ice-demon',
+  ] as const);
+  const enemyName = requireEnum(presentation.enemyName, [
+    'GHOUL',
+    'SKELETON KNIGHT',
+    'FIRE DEMON',
+    'ICE DEMON',
+  ] as const);
+  if (
+    (enemyId === 'ghoul' && enemyName !== 'GHOUL') ||
+    (enemyId === 'skeleton-knight' && enemyName !== 'SKELETON KNIGHT') ||
+    (enemyId === 'fire-demon' && enemyName !== 'FIRE DEMON') ||
+    (enemyId === 'ice-demon' && enemyName !== 'ICE DEMON')
+  ) {
+    throw new PersistenceCorruptionError('enemy splash identity');
+  }
+  return Object.freeze({ kind: 'enemy-splash', enemyId, enemyName });
 }
 
 function parseCombatNotice(value: unknown): CombatNoticePresentation {

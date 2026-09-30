@@ -401,8 +401,14 @@ export interface CombatNoticePresentation {
   readonly maximumHp: number;
 }
 
+export interface EnemySplashPresentation {
+  readonly kind: 'enemy-splash';
+  readonly enemyId: EnemyId;
+  readonly enemyName: EnemyName;
+}
+
 export type GamePresentation =
-  OpposedRollPresentation | CombatNoticePresentation;
+  OpposedRollPresentation | CombatNoticePresentation | EnemySplashPresentation;
 
 export type CommandRejectionReason =
   | 'duplicate-command'

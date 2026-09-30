@@ -1205,17 +1205,23 @@ function enterCombat(
     roll: initiative.roll,
     verdict: `FIRST: ${initiative.winner === 'hero' ? heroName(phase.heroClass) : enemy.name}`,
   });
+  const enemySplash = Object.freeze({
+    kind: 'enemy-splash' as const,
+    enemyId: enemy.id,
+    enemyName: enemy.name,
+  });
   if (initiative.winner !== 'enemy') {
     return {
       phase: combat,
       rng: initiative.rng,
-      presentations: Object.freeze([initiativePresentation]),
+      presentations: Object.freeze([enemySplash, initiativePresentation]),
     };
   }
   const opening = resolveEnemyTurn(combat, initiative.rng);
   return {
     ...opening,
     presentations: Object.freeze([
+      enemySplash,
       initiativePresentation,
       ...(opening.presentations ?? NO_PRESENTATIONS),
     ]),

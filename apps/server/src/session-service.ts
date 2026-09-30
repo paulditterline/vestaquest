@@ -210,6 +210,19 @@ export class SessionService {
             transientSequence += 1;
             continue;
           }
+          if (presentation.kind === 'enemy-splash') {
+            transientIntents.push(
+              this.#intent(
+                current.sessionId,
+                applied.state.revision,
+                transientSequence,
+                false,
+                { kind: 'enemy-splash', presentation },
+              ),
+            );
+            transientSequence += 1;
+            continue;
+          }
           transientIntents.push(
             this.#intent(
               current.sessionId,
