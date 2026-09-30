@@ -447,6 +447,17 @@ describe('map exploration game kernel', () => {
     expect(state.rng.draws).toBe(6);
   });
 
+  it.each([
+    [CHOICE_IDS.warrior, 'warrior'],
+    [CHOICE_IDS.rogue, 'rogue'],
+    [CHOICE_IDS.wizard, 'wizard'],
+  ] as const)('introduces %s with hero splash art', (choiceId, heroClass) => {
+    const result = choose(createRun(10), `choose-${heroClass}`, choiceId);
+    expect(result.status).toBe('accepted');
+    if (result.status !== 'accepted') return;
+    expect(result.presentations).toEqual([{ kind: 'hero-splash', heroClass }]);
+  });
+
   it('selects the same three spaced events for every class', () => {
     const eventSets = [
       CHOICE_IDS.warrior,

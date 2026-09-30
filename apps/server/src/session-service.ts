@@ -223,6 +223,19 @@ export class SessionService {
             transientSequence += 1;
             continue;
           }
+          if (presentation.kind === 'hero-splash') {
+            transientIntents.push(
+              this.#intent(
+                current.sessionId,
+                applied.state.revision,
+                transientSequence,
+                false,
+                { kind: 'hero-splash', presentation },
+              ),
+            );
+            transientSequence += 1;
+            continue;
+          }
           transientIntents.push(
             this.#intent(
               current.sessionId,

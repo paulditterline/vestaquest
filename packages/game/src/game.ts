@@ -578,6 +578,9 @@ function transitionFromChoice(
           dungeon,
         }),
         rng: placement.rng,
+        presentations: Object.freeze([
+          Object.freeze({ kind: 'hero-splash' as const, heroClass }),
+        ]),
       };
     }
     case 'exploration':

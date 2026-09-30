@@ -123,7 +123,10 @@ function BoardLab() {
   const [showCodes, setShowCodes] = useState(false);
   const frame =
     fixture.frames[Math.min(frameIndex, fixture.frames.length - 1)]!;
-  const baseline = frameIndex > 0 ? fixture.frames[0]?.layout : undefined;
+  const baseline =
+    frameIndex > 0 && !fixture.framesAreVariants
+      ? fixture.frames[0]?.layout
+      : undefined;
   const changed = changedCellCount(frame.layout, baseline);
 
   const selectFixture = (nextId: string) => {
@@ -196,7 +199,9 @@ function BoardLab() {
 
           {fixture.frames.length > 1 ? (
             <fieldset>
-              <legend>Reveal state</legend>
+              <legend>
+                {fixture.framesAreVariants ? 'Variant' : 'Reveal state'}
+              </legend>
               <div className="segmented-control segmented-control--frames">
                 {fixture.frames.map((candidate, index) => (
                   <button

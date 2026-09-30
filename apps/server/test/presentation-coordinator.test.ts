@@ -1,5 +1,6 @@
 import {
   renderGameView,
+  renderHeroSplash,
   renderTitlePresentation,
   toNumericRows,
 } from '@vestaquest/board';
@@ -135,9 +136,12 @@ describe('PresentationCoordinator', () => {
     ).toBe('locked');
 
     await coordinator.dispatch(created.sessionId);
-    expect(transport.attempts).toHaveLength(3);
-    const stored = await repository.get(created.sessionId);
+    expect(transport.attempts).toHaveLength(4);
     expect(toNumericRows(transport.attempts[2]!.layout)).toEqual(
+      toNumericRows(renderHeroSplash('rogue', 'black')),
+    );
+    const stored = await repository.get(created.sessionId);
+    expect(toNumericRows(transport.attempts[3]!.layout)).toEqual(
       toNumericRows(renderGameView(deriveView(stored!.state))),
     );
     expect((await service.getSession(created.sessionId)).view.display).toEqual({

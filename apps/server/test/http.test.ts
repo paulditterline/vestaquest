@@ -143,7 +143,7 @@ describe('Fastify session API', () => {
       kind: 'exploration',
       display: { legalChoices: [1, 2] },
     });
-    expect(transport.attempts).toHaveLength(3);
+    expect(transport.attempts).toHaveLength(4);
   });
 
   it('contains and reports a rejected background dispatch', async () => {

@@ -146,6 +146,7 @@ export type {
   GamePresentation,
   GameView,
   HeroClass,
+  HeroSplashPresentation,
   MapCellViewState,
   MapViewGrid,
   MapViewRow,
