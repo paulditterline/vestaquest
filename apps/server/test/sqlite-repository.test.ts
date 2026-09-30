@@ -105,8 +105,13 @@ describe('SqliteSessionRepository', () => {
     ).toEqual([
       { sequence: 0, status: 'delivered', kind: 'title' },
       { sequence: 1, status: 'delivered', kind: 'game-view' },
-      { sequence: 2, status: 'pending', kind: 'game-view' },
+      { sequence: 2, status: 'pending', kind: 'hero-splash' },
+      { sequence: 3, status: 'pending', kind: 'game-view' },
     ]);
+    expect(intents[2]?.payload).toMatchObject({
+      kind: 'hero-splash',
+      presentation: { heroClass: 'rogue' },
+    });
     await restartedRepository.close();
   });
 

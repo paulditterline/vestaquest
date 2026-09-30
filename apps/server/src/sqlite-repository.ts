@@ -15,6 +15,7 @@ import {
   type EnemySplashPresentation,
   type GamePresentation,
   type GameView,
+  type HeroSplashPresentation,
   type MapViewGrid,
   type OpposedRollPresentation,
   type RunState,
@@ -513,6 +514,14 @@ function parsePresentationPayload(json: string): PresentationPayload {
     }
     return Object.freeze({ kind: payload.kind, presentation });
   }
+  if (payload.kind === 'hero-splash') {
+    requireKeys(payload, ['kind', 'presentation']);
+    const presentation = parseGamePresentation(payload.presentation);
+    if (presentation.kind !== 'hero-splash') {
+      throw new PersistenceCorruptionError('hero splash presentation');
+    }
+    return Object.freeze({ kind: payload.kind, presentation });
+  }
   if (payload.kind !== 'game-view') {
     throw new PersistenceCorruptionError('presentation payload');
   }
@@ -527,6 +536,7 @@ function parseGamePresentation(value: unknown): GamePresentation {
   const kind = requireRecord(value).kind;
   if (kind === 'combat-notice') return parseCombatNotice(value);
   if (kind === 'enemy-splash') return parseEnemySplash(value);
+  if (kind === 'hero-splash') return parseHeroSplash(value);
   const presentation = requireExactObject(value, [
     'kind',
     'purpose',
@@ -593,6 +603,17 @@ function parseEnemySplash(value: unknown): EnemySplashPresentation {
     throw new PersistenceCorruptionError('enemy splash identity');
   }
   return Object.freeze({ kind: 'enemy-splash', enemyId, enemyName });
+}
+
+function parseHeroSplash(value: unknown): HeroSplashPresentation {
+  const presentation = requireExactObject(value, ['kind', 'heroClass']);
+  if (presentation.kind !== 'hero-splash') {
+    throw new PersistenceCorruptionError('hero splash');
+  }
+  return Object.freeze({
+    kind: 'hero-splash',
+    heroClass: parseHeroClass(presentation.heroClass),
+  });
 }
 
 function parseCombatNotice(value: unknown): CombatNoticePresentation {

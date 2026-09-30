@@ -96,6 +96,25 @@ describe('SessionService creation and presentation state', () => {
     ).toMatchObject({ status: 'delivered' });
   });
 
+  it('queues hero art before the first exploration view', async () => {
+    const { repository, service, sessionId } = await createReadySession(10);
+    await service.submitCommand(command(sessionId, 'class', 0, 2));
+    const intents = await repository.listPresentationIntents(sessionId);
+    expect(
+      intents.slice(-2).map(({ isStable, payload }) => ({
+        isStable,
+        kind: payload.kind,
+      })),
+    ).toEqual([
+      { isStable: false, kind: 'hero-splash' },
+      { isStable: true, kind: 'game-view' },
+    ]);
+    expect(intents.at(-2)?.payload).toMatchObject({
+      kind: 'hero-splash',
+      presentation: { heroClass: 'rogue' },
+    });
+  });
+
   it('queues scaffold, result, and stable frames for every combat roll', async () => {
     const { repository, service, sessionId } = await createReadySession(10);
     const chooseId = async (choiceId: string, key: string) => {
@@ -354,6 +373,6 @@ describe('atomic concurrent commands', () => {
     const stored = await repository.get(sessionId);
     expect(stored?.state.revision).toBe(1);
     expect(stored?.state.acceptedCommands).toHaveLength(1);
-    expect(await repository.listPresentationIntents(sessionId)).toHaveLength(3);
+    expect(await repository.listPresentationIntents(sessionId)).toHaveLength(4);
   });
 });

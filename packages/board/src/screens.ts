@@ -3,6 +3,7 @@ import { createFlagshipLayout, type FlagshipLayout } from './layout.js';
 import { fillRegion, withCell, withCells, writeText } from './primitives.js';
 import { renderMapPrototype, type MapPrototypeView } from './map-prototypes.js';
 import { renderEnemySplash } from './enemy-art.js';
+import { renderHeroSplash } from './hero-art.js';
 
 export type BoardShell = 'black' | 'white';
 
@@ -35,6 +36,7 @@ export type BoardFixture = Readonly<{
   label: string;
   description: string;
   provisionalValues?: boolean;
+  framesAreVariants?: boolean;
   frames: readonly BoardFixtureFrame[];
 }>;
 
@@ -305,10 +307,41 @@ export function createFixtureCatalog(
       ],
     },
     {
+      id: 'hero-splash-art',
+      label: 'Hero splash art',
+      description:
+        'Candidate room-distance portraits shown after selecting a class.',
+      framesAreVariants: true,
+      frames: [
+        {
+          id: 'warrior-art',
+          label: 'Warrior',
+          accessibleSummary:
+            'Candidate front-facing Warrior with visible eyes, shield at left, and sword at right.',
+          layout: renderHeroSplash('warrior', shell),
+        },
+        {
+          id: 'rogue-art',
+          label: 'Rogue',
+          accessibleSummary:
+            'Candidate front-facing, violet-hooded Rogue with visible eyes and daggers at both sides.',
+          layout: renderHeroSplash('rogue', shell),
+        },
+        {
+          id: 'wizard-art',
+          label: 'Wizard',
+          accessibleSummary:
+            'Candidate blue-hatted, violet-robed Wizard with green eyes and a short white staff.',
+          layout: renderHeroSplash('wizard', shell),
+        },
+      ],
+    },
+    {
       id: 'enemy-splash-art',
       label: 'Enemy splash art',
       description:
         'Candidate room-distance silhouettes for the four initial enemies.',
+      framesAreVariants: true,
       frames: [
         {
           id: 'ghoul-art',

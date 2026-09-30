@@ -407,8 +407,16 @@ export interface EnemySplashPresentation {
   readonly enemyName: EnemyName;
 }
 
+export interface HeroSplashPresentation {
+  readonly kind: 'hero-splash';
+  readonly heroClass: HeroClass;
+}
+
 export type GamePresentation =
-  OpposedRollPresentation | CombatNoticePresentation | EnemySplashPresentation;
+  | OpposedRollPresentation
+  | CombatNoticePresentation
+  | EnemySplashPresentation
+  | HeroSplashPresentation;
 
 export type CommandRejectionReason =
   | 'duplicate-command'
