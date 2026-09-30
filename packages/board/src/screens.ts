@@ -2,6 +2,7 @@ import { CHARACTER_CODE, type CharacterCode } from './character-codes.js';
 import { createFlagshipLayout, type FlagshipLayout } from './layout.js';
 import { fillRegion, withCell, withCells, writeText } from './primitives.js';
 import { renderMapPrototype, type MapPrototypeView } from './map-prototypes.js';
+import { renderEnemySplash } from './enemy-art.js';
 
 export type BoardShell = 'black' | 'white';
 
@@ -300,6 +301,41 @@ export function createFixtureCatalog(
           accessibleSummary:
             'Choose Warrior, Rogue, or Wizard. Provisional layout values shown.',
           layout: renderClassSelect(startingClasses),
+        },
+      ],
+    },
+    {
+      id: 'enemy-splash-art',
+      label: 'Enemy splash art',
+      description:
+        'Candidate room-distance silhouettes for the four initial enemies.',
+      frames: [
+        {
+          id: 'ghoul-art',
+          label: 'Ghoul',
+          accessibleSummary: 'Candidate green and violet Ghoul silhouette.',
+          layout: renderEnemySplash('ghoul', shell),
+        },
+        {
+          id: 'skeleton-knight-art',
+          label: 'Skeleton Knight',
+          accessibleSummary:
+            'Candidate white skull and red-eyed Skeleton Knight silhouette.',
+          layout: renderEnemySplash('skeleton-knight', shell),
+        },
+        {
+          id: 'fire-demon-art',
+          label: 'Fire Demon',
+          accessibleSummary:
+            'Candidate red, orange, and yellow Fire Demon silhouette.',
+          layout: renderEnemySplash('fire-demon', shell),
+        },
+        {
+          id: 'ice-demon-art',
+          label: 'Ice Demon',
+          accessibleSummary:
+            'Candidate blue, violet, and white Ice Demon silhouette.',
+          layout: renderEnemySplash('ice-demon', shell),
         },
       ],
     },

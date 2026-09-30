@@ -128,6 +128,7 @@ export type {
   DeathView,
   DungeonRunState,
   DungeonEventRunState,
+  EnemySplashPresentation,
   Equipment,
   EquipmentItemId,
   EquipmentItemName,

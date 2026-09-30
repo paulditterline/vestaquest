@@ -136,13 +136,21 @@ describe('SqliteSessionRepository', () => {
 
     const restarted = new SqliteSessionRepository(path);
     const intents = await restarted.listPresentationIntents(created.sessionId);
-    expect(intents.slice(-5).map(({ payload }) => payload.kind)).toEqual([
+    expect(intents.slice(-6).map(({ payload }) => payload.kind)).toEqual([
+      'enemy-splash',
       'roll-scaffold',
       'roll-result',
       'roll-scaffold',
       'roll-result',
       'game-view',
     ]);
+    expect(intents.at(-6)?.payload).toMatchObject({
+      kind: 'enemy-splash',
+      presentation: {
+        enemyId: 'ghoul',
+        enemyName: 'GHOUL',
+      },
+    });
     expect(intents.at(-4)?.payload).toMatchObject({
       kind: 'roll-result',
       presentation: { purpose: 'initiative', verdict: 'FIRST: GHOUL' },
