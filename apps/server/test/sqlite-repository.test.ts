@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
   CommandSessionRequestSchema,
+  type IdempotencyKey,
   type SessionId,
 } from '@vestaquest/contracts';
 import {
@@ -75,6 +76,75 @@ function command(
 }
 
 describe('SqliteSessionRepository', () => {
+  it('persists Lost Soul memory independently across restarts', async () => {
+    const path = await databasePath();
+    const repository = new SqliteSessionRepository(path);
+    const service = serviceFor(repository, 'memory');
+    const created = await service.createSession();
+    const key = 'record-lost-soul' as IdempotencyKey;
+    await repository.executeCommand(
+      created.sessionId,
+      key,
+      'lost-soul-memory',
+      (current) => ({
+        receipt: {
+          id: 'memory-receipt',
+          sessionId: current.sessionId,
+          idempotencyKey: key,
+          requestFingerprint: 'lost-soul-memory',
+          originalOutcome: 'accepted',
+          resultingViewVersion: current.state.revision,
+          acceptedAtMs: 1,
+        },
+        transition: {
+          session: current,
+          presentationIntents: [],
+          lostSoulMemory: {
+            heroClass: 'rogue',
+            cause: 'SKELETON KNIGHT',
+          },
+        },
+      }),
+    );
+    await repository.close();
+
+    const restarted = new SqliteSessionRepository(path);
+    expect(await restarted.getLostSoulMemory()).toEqual({
+      heroClass: 'rogue',
+      cause: 'SKELETON KNIGHT',
+    });
+    await restarted.close();
+  });
+
+  it('upgrades pre-Lost-Soul run snapshots while preserving replay validation', async () => {
+    const path = await databasePath();
+    const repository = new SqliteSessionRepository(path);
+    const service = serviceFor(repository, 'legacy');
+    const created = await service.createSession();
+    await repository.close();
+
+    const database = new DatabaseSync(path);
+    const row = database
+      .prepare('SELECT state_json FROM sessions WHERE session_id = ?')
+      .get(created.sessionId) as { state_json: string };
+    const legacy = JSON.parse(row.state_json) as Record<string, unknown>;
+    legacy.schemaVersion = 12;
+    legacy.rulesVersion = 'hybrid-demon-exit-v1';
+    delete legacy.lostSoulMemory;
+    database
+      .prepare('UPDATE sessions SET state_json = ? WHERE session_id = ?')
+      .run(JSON.stringify(legacy), created.sessionId);
+    database.close();
+
+    const restarted = new SqliteSessionRepository(path);
+    expect((await restarted.get(created.sessionId))?.state).toMatchObject({
+      schemaVersion: 13,
+      rulesVersion: 'lost-soul-v1',
+      lostSoulMemory: null,
+    });
+    await restarted.close();
+  });
+
   it('resumes state and ordered presentation intents after restart', async () => {
     const path = await databasePath();
     const firstRepository = new SqliteSessionRepository(path);

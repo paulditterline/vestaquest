@@ -152,6 +152,20 @@ export function renderChoice(selectedChoice?: 1 | 2 | 3): FlagshipLayout {
   return layout;
 }
 
+function renderLostSoul(remembers: boolean): FlagshipLayout {
+  let layout = createFlagshipLayout();
+  if (remembers) {
+    layout = writeCentered(layout, 0, 'THE LOST SOUL WHISPERS');
+    layout = writeText(layout, 'GO EAST FROM HERE', { row: 1, column: 0 });
+    return writeText(layout, '1 CONTINUE', { row: 5, column: 0 });
+  }
+  layout = writeCentered(layout, 0, 'LOST SOUL');
+  layout = writeText(layout, 'A WIZARD FELL', { row: 1, column: 0 });
+  layout = writeText(layout, 'BY THE CHAINS', { row: 2, column: 0 });
+  layout = writeText(layout, '1 REMEMBER', { row: 4, column: 0 });
+  return writeText(layout, '2 LEAVE', { row: 5, column: 0 });
+}
+
 export function renderInitiativeScaffold(): FlagshipLayout {
   let layout = createFlagshipLayout();
   layout = writeText(layout, 'WIZARD', { row: 0, column: 0 });
@@ -438,6 +452,28 @@ export function createFixtureCatalog(
           label: 'Choice accepted',
           accessibleSummary: 'Selected choice 1, Bash the door.',
           layout: choiceAfter,
+        },
+      ],
+    },
+    {
+      id: 'lost-soul',
+      label: 'Lost Soul event',
+      description:
+        'The latest failed hero returns as an optional, truthful memory.',
+      frames: [
+        {
+          id: 'lost-soul-echo',
+          label: 'Echo encountered',
+          accessibleSummary:
+            'A Lost Soul remembers a Wizard who died by the chains. Remember or leave.',
+          layout: renderLostSoul(false),
+        },
+        {
+          id: 'lost-soul-clue',
+          label: 'Memory accepted',
+          accessibleSummary:
+            'The Lost Soul truthfully whispers: go east from here.',
+          layout: renderLostSoul(true),
         },
       ],
     },

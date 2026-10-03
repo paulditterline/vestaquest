@@ -58,7 +58,10 @@ export class SessionService {
 
   public async createSession(): Promise<CreateSessionResponse> {
     const sessionId = SessionIdSchema.parse(this.#ids.nextSessionId());
-    const state = createRun(this.#seeds.nextSeed());
+    const state = createRun(
+      this.#seeds.nextSeed(),
+      await this.#repository.getLostSoulMemory(),
+    );
     const now = this.#clock.now();
     const session: StoredSession = Object.freeze({
       sessionId,
@@ -287,6 +290,14 @@ export class SessionService {
               { kind: 'game-view', view: applied.view },
             ),
           ]),
+          ...(applied.state.phase.kind === 'death'
+            ? {
+                lostSoulMemory: Object.freeze({
+                  heroClass: applied.state.phase.heroClass,
+                  cause: applied.state.phase.cause,
+                }),
+              }
+            : {}),
         });
       }
     }

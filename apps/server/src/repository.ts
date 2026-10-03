@@ -5,6 +5,7 @@ import type {
   RepositoryCommandResult,
   StoredSession,
 } from './types.js';
+import type { LostSoulMemory } from '@vestaquest/game';
 
 export interface SessionRepository {
   create(
@@ -12,6 +13,7 @@ export interface SessionRepository {
     intents: readonly PresentationIntent[],
   ): Promise<void>;
   get(sessionId: SessionId): Promise<StoredSession | undefined>;
+  getLostSoulMemory(): Promise<LostSoulMemory | null>;
   listPresentationIntents(
     sessionId: SessionId,
   ): Promise<readonly PresentationIntent[]>;
@@ -52,6 +54,7 @@ export class InMemorySessionRepository implements SessionRepository {
     SessionId,
     Map<IdempotencyKey, CommandDecision>
   >();
+  #lostSoulMemory: LostSoulMemory | null = null;
 
   create(
     session: StoredSession,
@@ -68,6 +71,10 @@ export class InMemorySessionRepository implements SessionRepository {
 
   get(sessionId: SessionId): Promise<StoredSession | undefined> {
     return Promise.resolve(this.#sessions.get(sessionId));
+  }
+
+  getLostSoulMemory(): Promise<LostSoulMemory | null> {
+    return Promise.resolve(this.#lostSoulMemory);
   }
 
   listPresentationIntents(
@@ -115,6 +122,11 @@ export class InMemorySessionRepository implements SessionRepository {
       this.#intents
         .get(sessionId)!
         .push(...decision.transition.presentationIntents);
+      if (decision.transition.lostSoulMemory) {
+        this.#lostSoulMemory = Object.freeze({
+          ...decision.transition.lostSoulMemory,
+        });
+      }
     }
     return Promise.resolve({
       kind: 'committed',

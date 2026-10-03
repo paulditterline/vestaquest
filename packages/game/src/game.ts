@@ -100,13 +100,18 @@ const CLASS_CHOICES = freezeChoices([
   { id: CHOICE_IDS.wizard, number: 3, label: 'WIZARD' },
 ]);
 
-export function createRun(seed: number): RunState {
+export function createRun(
+  seed: number,
+  lostSoulMemory: RunState['lostSoulMemory'] = null,
+): RunState {
   return freezeState({
     schemaVersion: GAME_STATE_VERSION,
     rulesVersion: GAME_RULES_VERSION,
     seed,
     revision: 0,
     rng: createRng(seed),
+    lostSoulMemory:
+      lostSoulMemory === null ? null : Object.freeze({ ...lostSoulMemory }),
     phase: Object.freeze({ kind: 'class-select' }),
     acceptedCommands: Object.freeze([]),
   });
@@ -301,7 +306,10 @@ export function deriveView(state: RunState): GameView {
           ...base,
           kind: 'event',
           heading: definition.heading,
-          copy: node.copy,
+          copy:
+            eventPhase.eventId === 'lost-soul'
+              ? lostSoulCopy(state.lostSoulMemory)
+              : node.copy,
           choices: freezeChoices(
             node.choices.map((choice, index) => ({
               id: eventChoiceId(eventPhase.eventId, choice.id),
@@ -449,8 +457,9 @@ export function applyCommand(
 export function replayRun(
   seed: number,
   acceptedCommands: readonly AcceptedCommandEntry[],
+  lostSoulMemory: RunState['lostSoulMemory'] = null,
 ): RunState {
-  let state = createRun(seed);
+  let state = createRun(seed, lostSoulMemory);
 
   for (const expected of acceptedCommands) {
     const result = applyCommand(state, expected.command);
@@ -529,6 +538,7 @@ function transitionFromChoice(
         topology,
         selected.exitRoomId,
         encounterRoomIds,
+        state.lostSoulMemory,
       );
       const exitGuardianId = selectExitGuardian(
         selected.topologyId,
@@ -980,15 +990,29 @@ function applyEventDestination(
 
 function truthfulClueHeading(
   eventId: EventPhase['eventId'],
-): 'THE PRISONER WHISPERS' | 'THE COLD AIR POINTS' {
+): 'THE PRISONER WHISPERS' | 'THE COLD AIR POINTS' | 'THE LOST SOUL WHISPERS' {
   switch (eventId) {
     case 'chained-victim':
       return 'THE PRISONER WHISPERS';
     case 'strange-hole':
       return 'THE COLD AIR POINTS';
+    case 'lost-soul':
+      return 'THE LOST SOUL WHISPERS';
     default:
       throw new Error(`Event ${eventId} has no truthful clue presentation.`);
   }
+}
+
+function lostSoulCopy(
+  memory: RunState['lostSoulMemory'],
+): readonly [string, string] {
+  if (memory === null) {
+    throw new Error('Lost Soul event requires a failed-hero memory.');
+  }
+  return Object.freeze([
+    `A ${heroName(memory.heroClass)} FELL`,
+    `BY ${memory.cause}`,
+  ]);
 }
 
 function truthfulExitDirection(phase: EventPhase): Direction {

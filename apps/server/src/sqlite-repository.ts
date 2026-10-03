@@ -16,6 +16,7 @@ import {
   type GamePresentation,
   type GameView,
   type HeroSplashPresentation,
+  type LostSoulMemory,
   type MapViewGrid,
   type OpposedRollPresentation,
   type RunState,
@@ -31,7 +32,7 @@ import type {
   StoredSession,
 } from './types.js';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 export class PersistenceCorruptionError extends Error {
   public constructor(entity: string) {
@@ -79,6 +80,16 @@ export class SqliteSessionRepository implements SessionRepository {
       this.#assertOpen();
       const row = this.#selectSessionRow(sessionId);
       return row ? parseSessionRow(row) : undefined;
+    });
+  }
+
+  public getLostSoulMemory(): Promise<LostSoulMemory | null> {
+    return asPromise(() => {
+      this.#assertOpen();
+      const row = this.#database
+        .prepare('SELECT memory_json FROM run_memory WHERE id = 1')
+        .get();
+      return row ? parseLostSoulMemory(requireString(row.memory_json)) : null;
     });
   }
 
@@ -158,6 +169,15 @@ export class SqliteSessionRepository implements SessionRepository {
           this.#updateSession(next);
           for (const intent of decision.transition.presentationIntents) {
             this.#insertIntent(intent);
+          }
+          if (decision.transition.lostSoulMemory) {
+            this.#database
+              .prepare(
+                `INSERT INTO run_memory (id, memory_json)
+                 VALUES (1, ?)
+                 ON CONFLICT(id) DO UPDATE SET memory_json = excluded.memory_json`,
+              )
+              .run(JSON.stringify(decision.transition.lostSoulMemory));
           }
         }
         return { kind: 'committed', receipt: decision.receipt, session: next };
@@ -285,6 +305,19 @@ export class SqliteSessionRepository implements SessionRepository {
           )
           .run(1, Date.now());
       }
+      if (version < 2) {
+        this.#database.exec(`
+          CREATE TABLE run_memory (
+            id INTEGER PRIMARY KEY CHECK(id = 1),
+            memory_json TEXT NOT NULL
+          );
+        `);
+        this.#database
+          .prepare(
+            'INSERT INTO schema_migrations (version, applied_at_ms) VALUES (?, ?)',
+          )
+          .run(2, Date.now());
+      }
       this.#database.exec('COMMIT');
     } catch (error) {
       this.#database.exec('ROLLBACK');
@@ -405,15 +438,30 @@ function parseSessionRow(row: Record<string, unknown>): StoredSession {
 }
 
 function parseRunState(json: string): RunState {
-  const candidate = parseJsonObject(json, 'run state');
+  const persisted = parseJsonObject(json, 'run state');
+  const candidate =
+    persisted.schemaVersion === 12 &&
+    persisted.rulesVersion === 'hybrid-demon-exit-v1' &&
+    !Object.hasOwn(persisted, 'lostSoulMemory')
+      ? {
+          ...persisted,
+          schemaVersion: 13,
+          rulesVersion: 'lost-soul-v1',
+          lostSoulMemory: null,
+        }
+      : persisted;
   const seed = requireNonnegativeInteger(candidate.seed, 'run seed');
+  const lostSoulMemory =
+    candidate.lostSoulMemory === null
+      ? null
+      : parseLostSoulMemoryValue(candidate.lostSoulMemory);
   const commandsValue = candidate.acceptedCommands;
   if (!Array.isArray(commandsValue))
     throw new PersistenceCorruptionError('run state');
   const commands = commandsValue.map(parseAcceptedCommand);
   let replayed: RunState;
   try {
-    replayed = replayRun(seed, commands);
+    replayed = replayRun(seed, commands, lostSoulMemory);
   } catch {
     throw new PersistenceCorruptionError('run state');
   }
@@ -421,6 +469,26 @@ function parseRunState(json: string): RunState {
     throw new PersistenceCorruptionError('run state');
   }
   return replayed;
+}
+
+function parseLostSoulMemory(json: string): LostSoulMemory {
+  return parseLostSoulMemoryValue(parseJsonObject(json, 'lost soul memory'));
+}
+
+function parseLostSoulMemoryValue(value: unknown): LostSoulMemory {
+  const memory = requireExactObject(value, ['heroClass', 'cause']);
+  return Object.freeze({
+    heroClass: parseHeroClass(memory.heroClass),
+    cause: requireEnum(memory.cause, [
+      'GHOUL',
+      'SKELETON KNIGHT',
+      'FIRE DEMON',
+      'ICE DEMON',
+      'TRAPS',
+      'THE CHAINS',
+      'THE DARK',
+    ] as const),
+  });
 }
 
 function parseAcceptedCommand(value: unknown): AcceptedCommandEntry {

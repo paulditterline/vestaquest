@@ -7,6 +7,7 @@ import type {
 import type {
   GamePresentation,
   GameView,
+  LostSoulMemory,
   RunState,
   TitlePresentation,
 } from '@vestaquest/game';
@@ -72,6 +73,7 @@ export type CommandReceipt = Readonly<{
 export type CommandTransition = Readonly<{
   session: StoredSession;
   presentationIntents: readonly PresentationIntent[];
+  lostSoulMemory?: LostSoulMemory;
 }>;
 
 export type CommandDecision = Readonly<{
