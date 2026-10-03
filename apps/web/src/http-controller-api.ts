@@ -2,9 +2,11 @@ import {
   CommandSessionResponseSchema,
   CreateSessionResponseSchema,
   GetSessionResponseSchema,
+  RetryDisplayResponseSchema,
   type CommandSessionRequest,
   type CreateSessionRequest,
   type GetSessionRequest,
+  type RetryDisplayRequest,
 } from '@vestaquest/contracts';
 import type { ControllerApi } from './controller-client.js';
 
@@ -79,6 +81,15 @@ export class FetchControllerApi implements ControllerApi {
     throw new ControllerApiError('invalid-response', {
       status: result.response.status,
     });
+  }
+
+  public async retryDisplay(request: RetryDisplayRequest): Promise<unknown> {
+    const result = await this.#request(
+      `/sessions/${encodeURIComponent(request.sessionId)}/display/retry`,
+      { method: 'POST', body: JSON.stringify(request) },
+    );
+    if (!result.response.ok) throw httpError(result.response.status);
+    return parseResponse(RetryDisplayResponseSchema.safeParse(result.body));
   }
 
   async #request(

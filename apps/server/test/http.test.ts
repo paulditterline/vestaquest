@@ -4,7 +4,11 @@ import {
   type SessionId,
 } from '@vestaquest/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BoardOutputQueue, MemoryBoardTransport } from '@vestaquest/transport';
+import {
+  BoardOutputQueue,
+  MemoryBoardTransport,
+  TransportError,
+} from '@vestaquest/transport';
 import {
   InMemorySessionRepository,
   PresentationCoordinator,
@@ -114,6 +118,65 @@ async function pollView(
 }
 
 describe('Fastify session API', () => {
+  it('retries an interrupted board from its first pending durable frame', async () => {
+    let shouldFail = true;
+    let nextId = 0;
+    const repository = new InMemorySessionRepository();
+    const service = new SessionService({
+      repository,
+      ids: {
+        nextSessionId: () => `recovery-session-${++nextId}`,
+        nextReceiptId: () => `recovery-receipt-${++nextId}`,
+        nextPresentationId: () => `recovery-presentation-${++nextId}`,
+      },
+      clock: { now: () => 30_000 + nextId },
+      seeds: { nextSeed: () => 1 },
+    });
+    const transport = new MemoryBoardTransport({
+      onSend: () => {
+        if (!shouldFail) return;
+        shouldFail = false;
+        throw new TransportError({
+          operation: 'send',
+          kind: 'server',
+          retryable: false,
+          deliveryCertainty: 'not-sent',
+        });
+      },
+    });
+    const queue = new BoardOutputQueue(transport, { maxAttempts: 1 });
+    const coordinator = new PresentationCoordinator({
+      shell: 'black',
+      queue,
+      service,
+      repository,
+    });
+    const server = buildHttpServer({
+      sessionService: service,
+      presentationDispatcher: coordinator,
+    });
+    servers.push(server);
+
+    const sessionId = await createSession(server);
+    await pollView(server, sessionId, 'blocked');
+    const recovered = await server.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/display/retry`,
+      payload: { protocolVersion: 1, sessionId },
+    });
+
+    expect(recovered.statusCode).toBe(200);
+    expect(recovered.json()).toMatchObject({
+      sessionId,
+      view: {
+        kind: 'class-select',
+        display: { status: 'ready', legalChoices: [1, 2, 3] },
+      },
+    });
+    expect(transport.attempts).toHaveLength(3);
+    queue.close({ abort: true });
+  });
+
   it('dispatches created and accepted presentation output in the background', async () => {
     const { server, transport } = createDispatchingHarness();
     const sessionId = await createSession(server);
@@ -157,6 +220,7 @@ describe('Fastify session API', () => {
       sessionService: service,
       presentationDispatcher: {
         dispatch: () => Promise.reject(failure),
+        retry: () => Promise.reject(failure),
       },
       onBackgroundDispatchError: observe,
     });

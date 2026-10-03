@@ -5,13 +5,14 @@ import {
 } from '@vestaquest/contracts';
 import { renderGameView, toNumericRows } from '@vestaquest/board';
 import { deriveView } from '@vestaquest/game';
-import { MemoryBoardTransport } from '@vestaquest/transport';
+import { MemoryBoardTransport, TransportError } from '@vestaquest/transport';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_DEVELOPMENT_PORT,
   DEVELOPMENT_HOST,
   createDevelopmentComposition,
   parseDevelopmentPort,
+  SessionService,
   SqliteSessionRepository,
   type DevelopmentComposition,
 } from '../src/index.js';
@@ -130,6 +131,96 @@ describe('private development composition', () => {
     );
   });
 
+  it('restarts a pending durable board sequence when the controller reconnects', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'vestaquest-pending-'));
+    temporaryDirectories.push(directory);
+    const path = join(directory, 'sessions.sqlite');
+    const repository = new SqliteSessionRepository(path);
+    let nextId = 0;
+    const service = new SessionService({
+      repository,
+      ids: {
+        nextSessionId: () => `pending-session-${++nextId}`,
+        nextReceiptId: () => `pending-receipt-${++nextId}`,
+        nextPresentationId: () => `pending-presentation-${++nextId}`,
+      },
+      clock: { now: () => 1_000 + nextId },
+      seeds: { nextSeed: () => 1 },
+    });
+    const created = await service.createSession();
+    await repository.close();
+
+    const restarted = createDevelopmentComposition({
+      repository: new SqliteSessionRepository(path),
+      minimumWriteIntervalMs: 0,
+    });
+    compositions.push(restarted);
+    const resumed = await restarted.server.inject({
+      method: 'GET',
+      url: `/api/sessions/${created.sessionId}?protocolVersion=1`,
+    });
+    expect(resumed.statusCode).toBe(200);
+    expect(resumed.json()).toMatchObject({
+      view: { display: { status: 'locked', legalChoices: [] } },
+    });
+
+    await waitUntilReady(restarted, created.sessionId);
+    expect(restarted.transport.attempts).toHaveLength(2);
+  });
+
+  it('resumes a durable interrupted display after process restart', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'vestaquest-recovery-'));
+    temporaryDirectories.push(directory);
+    const path = join(directory, 'sessions.sqlite');
+    const first = createDevelopmentComposition({
+      repository: new SqliteSessionRepository(path),
+      transport: new MemoryBoardTransport({
+        onSend: () => {
+          throw new TransportError({
+            operation: 'send',
+            kind: 'server',
+            retryable: false,
+            deliveryCertainty: 'not-sent',
+          });
+        },
+      }),
+      minimumWriteIntervalMs: 0,
+    });
+    compositions.push(first);
+    const createdResponse = await first.server.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      payload: { protocolVersion: 1 },
+    });
+    const created = CreateSessionResponseSchema.parse(createdResponse.json());
+    await waitUntilDisplayStatus(first, created.sessionId, 'blocked');
+    await first.close();
+
+    const restarted = createDevelopmentComposition({
+      repository: new SqliteSessionRepository(path),
+      minimumWriteIntervalMs: 0,
+    });
+    compositions.push(restarted);
+    expect(
+      (await restarted.sessionService.getSession(created.sessionId)).view
+        .display.status,
+    ).toBe('blocked');
+
+    const recovered = await restarted.server.inject({
+      method: 'POST',
+      url: `/api/sessions/${created.sessionId}/display/retry`,
+      payload: { protocolVersion: 1, sessionId: created.sessionId },
+    });
+    expect(recovered.statusCode).toBe(200);
+    expect(recovered.json()).toMatchObject({
+      view: {
+        kind: 'class-select',
+        display: { status: 'ready', legalChoices: [1, 2, 3] },
+      },
+    });
+    expect(restarted.transport.attempts).toHaveLength(2);
+  });
+
   it('uses a fixed loopback host and validates its configurable port', () => {
     expect(DEVELOPMENT_HOST).toBe('127.0.0.1');
     expect(DEFAULT_DEVELOPMENT_PORT).toBe(8787);
@@ -145,12 +236,20 @@ async function waitUntilReady(
   composition: DevelopmentComposition,
   sessionId: SessionId,
 ): Promise<void> {
+  return waitUntilDisplayStatus(composition, sessionId, 'ready');
+}
+
+async function waitUntilDisplayStatus(
+  composition: DevelopmentComposition,
+  sessionId: SessionId,
+  status: 'ready' | 'blocked',
+): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const session = await composition.sessionService.getSession(sessionId);
-    if (session.view.display.status === 'ready') return;
+    if (session.view.display.status === status) return;
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
-  throw new Error('Development session did not become ready.');
+  throw new Error(`Development session did not become ${status}.`);
 }
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

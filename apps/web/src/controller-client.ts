@@ -9,6 +9,7 @@ import {
   type ControllerView,
   type CreateSessionRequest,
   type GetSessionRequest,
+  type RetryDisplayRequest,
   type SessionId,
 } from '@vestaquest/contracts';
 
@@ -16,6 +17,7 @@ export interface ControllerApi {
   createSession(request: CreateSessionRequest): Promise<unknown>;
   getSession(request: GetSessionRequest): Promise<unknown>;
   commandSession(request: CommandSessionRequest): Promise<unknown>;
+  retryDisplay(request: RetryDisplayRequest): Promise<unknown>;
 }
 
 export type ControllerConnection =
@@ -133,6 +135,47 @@ export class ControllerClient {
     if (this.#connectRequest) return this.#connectRequest;
     this.#setSnapshot(Object.freeze({ connection: 'connecting' }));
     return this.connect();
+  }
+
+  public async retryDisplay(): Promise<void> {
+    const current = this.#snapshot;
+    if (
+      current.connection !== 'connected' ||
+      !current.sessionId ||
+      current.view?.display.status !== 'blocked'
+    ) {
+      return;
+    }
+    this.#setSnapshot(
+      Object.freeze({
+        connection: 'reconnecting',
+        sessionId: current.sessionId,
+        view: current.view,
+      }),
+    );
+    try {
+      const response = GetSessionResponseSchema.parse(
+        await this.#api.retryDisplay({
+          protocolVersion: PROTOCOL_VERSION,
+          sessionId: current.sessionId,
+        }),
+      );
+      this.#setSnapshot(
+        Object.freeze({
+          connection: 'connected',
+          sessionId: response.sessionId,
+          view: response.view,
+        }),
+      );
+    } catch {
+      this.#setSnapshot(
+        Object.freeze({
+          connection: 'offline',
+          sessionId: current.sessionId,
+          view: current.view,
+        }),
+      );
+    }
   }
 
   public async choose(choice: ChoiceNumber): Promise<void> {

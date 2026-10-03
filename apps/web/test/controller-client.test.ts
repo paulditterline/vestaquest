@@ -4,6 +4,7 @@ import {
   type CommandSessionRequest,
   type CreateSessionRequest,
   type GetSessionRequest,
+  type RetryDisplayRequest,
 } from '@vestaquest/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -42,6 +43,16 @@ const lockedSessionResponse = CreateSessionResponseSchema.parse({
     version: 4,
     kind: 'exploration',
     display: { status: 'locked', legalChoices: [] },
+  },
+});
+
+const blockedSessionResponse = CreateSessionResponseSchema.parse({
+  protocolVersion: PROTOCOL_VERSION,
+  sessionId: 'session-test',
+  view: {
+    version: 4,
+    kind: 'exploration',
+    display: { status: 'blocked', legalChoices: [] },
   },
 });
 
@@ -150,6 +161,34 @@ describe('ControllerClient', () => {
     });
   });
 
+  it('retries an interrupted board before accepting more input', async () => {
+    const retry = deferred<unknown>();
+    const api = new FakeControllerApi();
+    api.createResult = Promise.resolve(blockedSessionResponse);
+    api.retryResult = retry.promise;
+    const client = new ControllerClient({ api });
+    await client.connect();
+
+    const recovering = client.retryDisplay();
+    expect(client.getSnapshot()).toMatchObject({
+      connection: 'reconnecting',
+      view: blockedSessionResponse.view,
+    });
+    expect(api.retryRequests).toEqual([
+      {
+        protocolVersion: PROTOCOL_VERSION,
+        sessionId: blockedSessionResponse.sessionId,
+      },
+    ]);
+
+    retry.resolve(readyResponse);
+    await recovering;
+    expect(client.getSnapshot()).toMatchObject({
+      connection: 'connected',
+      view: readyResponse.view,
+    });
+  });
+
   it('ignores choices that are not currently legal', async () => {
     const api = new FakeControllerApi();
     const client = new ControllerClient({ api });
@@ -247,6 +286,7 @@ describe('ControllerPanel', () => {
         onChoose: () => undefined,
         onNewSession: () => undefined,
         onReconnect: () => undefined,
+        onRetryDisplay: () => undefined,
       }),
     );
 
@@ -276,11 +316,13 @@ describe('ControllerPanel', () => {
           onChoose: () => undefined,
           onNewSession: () => undefined,
           onReconnect: () => undefined,
+          onRetryDisplay: () => undefined,
         }),
       );
 
       expect(html).toContain(status.toUpperCase());
       expect(html).not.toContain('aria-label="Choices"');
+      if (status === 'blocked') expect(html).toContain('Retry Board');
       if (status === 'complete') expect(html).toContain('New Game');
     },
   );
@@ -290,9 +332,11 @@ class FakeControllerApi implements ControllerApi {
   public readonly createRequests: CreateSessionRequest[] = [];
   public readonly getRequests: GetSessionRequest[] = [];
   public readonly commandRequests: CommandSessionRequest[] = [];
+  public readonly retryRequests: RetryDisplayRequest[] = [];
   public createResult: Promise<unknown> = Promise.resolve(readyResponse);
   public getResult: Promise<unknown> = Promise.resolve(readyResponse);
   public commandResult: Promise<unknown> = Promise.resolve(lockedResponse);
+  public retryResult: Promise<unknown> = Promise.resolve(readyResponse);
 
   public createSession(request: CreateSessionRequest): Promise<unknown> {
     this.createRequests.push(request);
@@ -307,6 +351,11 @@ class FakeControllerApi implements ControllerApi {
   public commandSession(request: CommandSessionRequest): Promise<unknown> {
     this.commandRequests.push(request);
     return this.commandResult;
+  }
+
+  public retryDisplay(request: RetryDisplayRequest): Promise<unknown> {
+    this.retryRequests.push(request);
+    return this.retryResult;
   }
 }
 

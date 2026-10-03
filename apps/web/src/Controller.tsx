@@ -25,6 +25,7 @@ export function ControllerApp({
         onChoose={(choice) => void client.choose(choice)}
         onNewSession={() => void client.startNew()}
         onReconnect={() => void client.connect()}
+        onRetryDisplay={() => void client.retryDisplay()}
         snapshot={snapshot}
       />
     </main>
@@ -37,6 +38,7 @@ export type ControllerPanelProps = Readonly<{
   onChoose: (choice: ChoiceNumber) => void;
   onNewSession: () => void;
   onReconnect: () => void;
+  onRetryDisplay: () => void;
 }>;
 
 export function ControllerPanel({
@@ -45,6 +47,7 @@ export function ControllerPanel({
   onChoose,
   onNewSession,
   onReconnect,
+  onRetryDisplay,
 }: ControllerPanelProps) {
   const displayStatus = snapshot.view?.display.status ?? 'unavailable';
   const choices =
@@ -96,6 +99,16 @@ export function ControllerPanel({
         <div className="controller-recovery">
           <button onClick={onReconnect} type="button">
             Reconnect
+          </button>
+          <button onClick={onNewSession} type="button">
+            New Game
+          </button>
+        </div>
+      ) : displayStatus === 'blocked' ? (
+        <div className="controller-recovery">
+          <p>The board update was interrupted.</p>
+          <button onClick={onRetryDisplay} type="button">
+            Retry Board
           </button>
           <button onClick={onNewSession} type="button">
             New Game

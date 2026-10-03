@@ -52,6 +52,7 @@ export function PlayLab({
       onChoose={(choice) => void controller.client.choose(choice)}
       onNewSession={() => void controller.client.startNew()}
       onReconnect={() => void controller.client.connect()}
+      onRetryDisplay={() => void controller.client.retryDisplay()}
       shell={shell}
     />
   );
@@ -63,6 +64,7 @@ export type PlayLabViewProps = Readonly<{
   onChoose: Parameters<typeof ControllerPanel>[0]['onChoose'];
   onNewSession: () => void;
   onReconnect: () => void;
+  onRetryDisplay: () => void;
   shell: BoardShell;
 }>;
 
@@ -72,6 +74,7 @@ export function PlayLabView({
   onChoose,
   onNewSession,
   onReconnect,
+  onRetryDisplay,
   shell,
 }: PlayLabViewProps) {
   const layout = board.projection
@@ -99,6 +102,7 @@ export function PlayLabView({
             onChoose={onChoose}
             onNewSession={onNewSession}
             onReconnect={onReconnect}
+            onRetryDisplay={onRetryDisplay}
             snapshot={controller}
           />
         </aside>
