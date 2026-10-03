@@ -4,6 +4,7 @@ import { fillRegion, withCell, withCells, writeText } from './primitives.js';
 import { renderMapPrototype, type MapPrototypeView } from './map-prototypes.js';
 import { renderEnemySplash } from './enemy-art.js';
 import { renderHeroSplash } from './hero-art.js';
+import { renderVictoryDoorSplash } from './victory-art.js';
 
 export type BoardShell = 'black' | 'white';
 
@@ -369,6 +370,21 @@ export function createFixtureCatalog(
           accessibleSummary:
             'Candidate blue, violet, and white Ice Demon silhouette.',
           layout: renderEnemySplash('ice-demon', shell),
+        },
+      ],
+    },
+    {
+      id: 'victory-door-art',
+      label: 'Victory door art',
+      description:
+        'Candidate final interstitial: a gold arch filled with white light.',
+      frames: [
+        {
+          id: 'victory-door',
+          label: 'Open exit',
+          accessibleSummary:
+            'A gold exit arch opens into uninterrupted white light. You escaped!',
+          layout: renderVictoryDoorSplash(shell),
         },
       ],
     },

@@ -161,6 +161,7 @@ export type {
   SpellSelectView,
   TitlePresentation,
   VictoryPhase,
+  VictoryDoorPresentation,
   VictoryView,
 } from './types.js';
 export type { RngDraw, RngState, RngVersion } from './rng.js';

@@ -3,6 +3,7 @@ import {
   renderCombatNotice,
   renderEnemySplash,
   renderHeroSplash,
+  renderVictoryDoorSplash,
   renderOpposedRollResult,
   renderOpposedRollScaffold,
   renderTitlePresentation,
@@ -142,6 +143,8 @@ export class PresentationCoordinator {
           intent.payload.presentation.heroClass,
           this.#shell,
         );
+      case 'victory-door':
+        return renderVictoryDoorSplash(this.#shell);
       case 'game-view':
         return renderGameView(intent.payload.view, this.#shell);
     }

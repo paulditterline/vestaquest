@@ -1,6 +1,7 @@
 export * from './character-codes.js';
 export * from './enemy-art.js';
 export * from './hero-art.js';
+export * from './victory-art.js';
 export * from './game-views.js';
 export * from './layout.js';
 export * from './map-prototypes.js';
