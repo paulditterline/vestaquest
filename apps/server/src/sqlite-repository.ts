@@ -19,6 +19,7 @@ import {
   type MapViewGrid,
   type OpposedRollPresentation,
   type RunState,
+  type VictoryDoorPresentation,
 } from '@vestaquest/game';
 import { DuplicateSessionError, type SessionRepository } from './repository.js';
 import type {
@@ -522,6 +523,14 @@ function parsePresentationPayload(json: string): PresentationPayload {
     }
     return Object.freeze({ kind: payload.kind, presentation });
   }
+  if (payload.kind === 'victory-door') {
+    requireKeys(payload, ['kind', 'presentation']);
+    const presentation = parseGamePresentation(payload.presentation);
+    if (presentation.kind !== 'victory-door') {
+      throw new PersistenceCorruptionError('victory door presentation');
+    }
+    return Object.freeze({ kind: payload.kind, presentation });
+  }
   if (payload.kind !== 'game-view') {
     throw new PersistenceCorruptionError('presentation payload');
   }
@@ -537,6 +546,7 @@ function parseGamePresentation(value: unknown): GamePresentation {
   if (kind === 'combat-notice') return parseCombatNotice(value);
   if (kind === 'enemy-splash') return parseEnemySplash(value);
   if (kind === 'hero-splash') return parseHeroSplash(value);
+  if (kind === 'victory-door') return parseVictoryDoor(value);
   const presentation = requireExactObject(value, [
     'kind',
     'purpose',
@@ -614,6 +624,14 @@ function parseHeroSplash(value: unknown): HeroSplashPresentation {
     kind: 'hero-splash',
     heroClass: parseHeroClass(presentation.heroClass),
   });
+}
+
+function parseVictoryDoor(value: unknown): VictoryDoorPresentation {
+  const presentation = requireExactObject(value, ['kind']);
+  if (presentation.kind !== 'victory-door') {
+    throw new PersistenceCorruptionError('victory door');
+  }
+  return Object.freeze({ kind: 'victory-door' });
 }
 
 function parseCombatNotice(value: unknown): CombatNoticePresentation {

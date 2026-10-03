@@ -878,6 +878,7 @@ describe('map exploration game kernel', () => {
         prompt: 'WIZARD CASTS FIREBALL',
         verdict: 'WEAK! ICE DEMON SLAIN',
       },
+      { kind: 'victory-door' },
     ]);
     expect(cast.state.phase).toEqual({
       kind: 'victory',
@@ -1206,6 +1207,7 @@ describe('map exploration game kernel', () => {
         right: { name: 'DANGER', diceLabel: 'D6', modifier: 5 },
         verdict: 'THE WAY OPENS',
       },
+      { kind: 'victory-door' },
     ]);
   });
 

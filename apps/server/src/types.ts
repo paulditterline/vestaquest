@@ -40,6 +40,10 @@ export type PresentationPayload =
       kind: 'hero-splash';
       presentation: Extract<GamePresentation, { kind: 'hero-splash' }>;
     }>
+  | Readonly<{
+      kind: 'victory-door';
+      presentation: Extract<GamePresentation, { kind: 'victory-door' }>;
+    }>
   | Readonly<{ kind: 'game-view'; view: GameView }>;
 
 export type PresentationIntent = Readonly<{

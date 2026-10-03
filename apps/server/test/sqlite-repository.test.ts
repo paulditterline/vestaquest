@@ -193,7 +193,7 @@ describe('SqliteSessionRepository', () => {
       sessionId,
       state: createRun(1),
       displayStatus: 'locked',
-      nextPresentationSequence: 3,
+      nextPresentationSequence: 4,
       createdAtMs: 1,
       updatedAtMs: 1,
     };
@@ -217,10 +217,22 @@ describe('SqliteSessionRepository', () => {
         payload: { kind: 'roll-result', presentation: roll },
       },
       {
-        id: 'trap-death-intent',
+        id: 'victory-door-intent',
         sessionId,
         viewVersion: 0,
         sequence: 2,
+        isStable: false,
+        status: 'pending',
+        payload: {
+          kind: 'victory-door',
+          presentation: { kind: 'victory-door' },
+        },
+      },
+      {
+        id: 'trap-death-intent',
+        sessionId,
+        viewVersion: 0,
+        sequence: 3,
         isStable: true,
         status: 'pending',
         payload: {
@@ -254,6 +266,12 @@ describe('SqliteSessionRepository', () => {
             left: { modifierStat: 'NONE' },
             right: { name: 'DANGER', modifierStat: 'NONE' },
           },
+        },
+      },
+      {
+        payload: {
+          kind: 'victory-door',
+          presentation: { kind: 'victory-door' },
         },
       },
       {

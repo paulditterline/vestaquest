@@ -578,7 +578,7 @@ Branch: `codex/complete-run-content`
 
 Gate: E
 
-Status: **Active**. The approved hybrid Demon exit—deterministic Fire/Ice selection independent of class, direct combat, one class-specific keep-high bypass against provisional Danger 5, retreat, persistent failed-bypass combat, and terminal victory—passed owner Board Lab review on 2026-09-29. The owner confirmed Demon persistence after retreat/re-entry and completed a Rogue `SLIP` victory. Failed-bypass combat and guardian HP persistence after Run remain automated-test verified. The owner-approved Ghoul, Skeleton Knight, Fire Demon, and Ice Demon splash compositions and their live pre-initiative sequence are merged. The owner approved front-facing Warrior, Rogue, and Wizard compositions with visible eyes and class equipment on 2026-09-29; their live post-selection sequence awaits final Board Lab review. Victory-door art remains the final required initial interstitial.
+Status: **Active**. The approved hybrid Demon exit—deterministic Fire/Ice selection independent of class, direct combat, one class-specific keep-high bypass against provisional Danger 5, retreat, persistent failed-bypass combat, and terminal victory—passed owner Board Lab review on 2026-09-29. The owner confirmed Demon persistence after retreat/re-entry and completed a Rogue `SLIP` victory. Failed-bypass combat and guardian HP persistence after Run remain automated-test verified. The owner-approved enemy introductions and front-facing Warrior, Rogue, and Wizard introductions are merged in their live sequences. On 2026-10-03 the owner approved the final required initial art composition: a gold victory arch filled completely with shell-contrasting light above `YOU ESCAPED!`; its live pre-summary sequence awaits final Board Lab review.
 
 Build:
 
@@ -668,9 +668,9 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Physically review and merge the live post-selection hero splash sequence.
+1. Physically review and merge the live pre-summary victory-door sequence.
 2. Implement and review the approved Lost Soul semantics without cross-run gear recovery.
-3. Prototype the victory exit-door interstitial for Slice 8.
+3. Complete representative full-run golden-seed review for Slice 8.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed

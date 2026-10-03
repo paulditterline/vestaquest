@@ -1145,7 +1145,10 @@ function transitionExit(
         enemiesSlain: phase.enemiesSlain,
       }),
       rng: bypass.roll.rng,
-      presentations: Object.freeze([presentation]),
+      presentations: Object.freeze([
+        presentation,
+        Object.freeze({ kind: 'victory-door' as const }),
+      ]),
     };
   }
   const combat = enterCombat(
@@ -1782,7 +1785,10 @@ function resolveBattleLoot(
         enemiesSlain,
       }),
       rng,
-      presentations: Object.freeze([presentation]),
+      presentations: Object.freeze([
+        presentation,
+        Object.freeze({ kind: 'victory-door' as const }),
+      ]),
     };
   }
   const ordinaryEnemyId: OrdinaryEnemyId = defeated.enemyId;

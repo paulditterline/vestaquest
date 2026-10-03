@@ -412,11 +412,16 @@ export interface HeroSplashPresentation {
   readonly heroClass: HeroClass;
 }
 
+export interface VictoryDoorPresentation {
+  readonly kind: 'victory-door';
+}
+
 export type GamePresentation =
   | OpposedRollPresentation
   | CombatNoticePresentation
   | EnemySplashPresentation
-  | HeroSplashPresentation;
+  | HeroSplashPresentation
+  | VictoryDoorPresentation;
 
 export type CommandRejectionReason =
   | 'duplicate-command'

@@ -236,6 +236,19 @@ export class SessionService {
             transientSequence += 1;
             continue;
           }
+          if (presentation.kind === 'victory-door') {
+            transientIntents.push(
+              this.#intent(
+                current.sessionId,
+                applied.state.revision,
+                transientSequence,
+                false,
+                { kind: 'victory-door', presentation },
+              ),
+            );
+            transientSequence += 1;
+            continue;
+          }
           transientIntents.push(
             this.#intent(
               current.sessionId,
