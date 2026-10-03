@@ -168,13 +168,20 @@ export type {
 } from './types.js';
 export type { RngDraw, RngState, RngVersion } from './rng.js';
 export {
+  COMPLETE_RUN_POLICY_VERSION,
+  DEFAULT_COMPLETE_RUN_COMMAND_LIMIT,
   DEFAULT_READINESS_COMMAND_LIMIT,
   DEFAULT_READINESS_RUNS_PER_CLASS,
   EXIT_READINESS_POLICY_VERSION,
   simulateExitReadiness,
   simulateExitReadinessReport,
+  simulateCompleteRun,
 } from './simulation.js';
 export type {
+  CompleteRunExitStrategy,
+  CompleteRunOutcome,
+  CompleteRunPresentationCounts,
+  CompleteRunResult,
   ExitReadinessClassSummary,
   ExitReadinessOutcome,
   ExitReadinessReport,

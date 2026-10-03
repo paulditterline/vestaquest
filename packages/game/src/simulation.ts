@@ -1,4 +1,9 @@
-import { ENEMY_STEAL_LOOT, EQUIPMENT } from './balance.js';
+import {
+  ENEMY_STEAL_LOOT,
+  EQUIPMENT,
+  type EnemyId,
+  type HeroStats,
+} from './balance.js';
 import { applyCommand, createRun, deriveView } from './game.js';
 import { shortestRoomPath } from './encounters.js';
 import { DIRECTIONS, getRoom, getTopology } from './topology.js';
@@ -6,6 +11,7 @@ import {
   CHOICE_IDS,
   type ChoiceId,
   type DeathCause,
+  type GamePresentation,
   type GameView,
   type HeroClass,
   type RunState,
@@ -14,6 +20,8 @@ import {
 export const EXIT_READINESS_POLICY_VERSION = 'class-tactics-v1' as const;
 export const DEFAULT_READINESS_RUNS_PER_CLASS = 1_000 as const;
 export const DEFAULT_READINESS_COMMAND_LIMIT = 100 as const;
+export const COMPLETE_RUN_POLICY_VERSION = 'class-tactics-exit-v1' as const;
+export const DEFAULT_COMPLETE_RUN_COMMAND_LIMIT = 150 as const;
 
 export type ExitReadinessResult = 'exit-ready' | 'death' | 'command-limit';
 
@@ -52,6 +60,34 @@ export type ExitReadinessReport = Readonly<{
   runsPerClass: number;
   totalRuns: number;
   classes: Readonly<Record<HeroClass, ExitReadinessClassSummary>>;
+}>;
+
+export type CompleteRunResult = 'victory' | 'death' | 'command-limit';
+export type CompleteRunExitStrategy = 'bypass' | 'fight';
+export type CompleteRunPresentationCounts = Readonly<{
+  heroSplash: number;
+  enemySplash: number;
+  opposedRoll: number;
+  combatNotice: number;
+  victoryDoor: number;
+}>;
+export type CompleteRunOutcome = Readonly<{
+  policyVersion: typeof COMPLETE_RUN_POLICY_VERSION;
+  seed: number;
+  heroClass: HeroClass;
+  topologyId: string;
+  exitRoomId: string;
+  exitGuardian: Extract<EnemyId, 'fire-demon' | 'ice-demon'>;
+  exitStrategy: CompleteRunExitStrategy;
+  result: CompleteRunResult;
+  commands: number;
+  roomsFound: number;
+  enemiesSlain: number;
+  level: number | null;
+  hp: number | null;
+  maximumHp: number | null;
+  deathCause: DeathCause | null;
+  presentations: CompleteRunPresentationCounts;
 }>;
 
 /**
@@ -187,6 +223,109 @@ export function simulateExitReadinessReport(
   });
 }
 
+/**
+ * Plays a complete deterministic run through the real command engine. The
+ * policy follows the selected shortest route, uses class tactics, and either
+ * attempts the class bypass or commits to fighting the exit guardian.
+ */
+export function simulateCompleteRun(
+  seed: number,
+  heroClass: HeroClass,
+  exitStrategy: CompleteRunExitStrategy = 'bypass',
+  commandLimit: number = DEFAULT_COMPLETE_RUN_COMMAND_LIMIT,
+): CompleteRunOutcome {
+  if (!Number.isInteger(commandLimit) || commandLimit < 1) {
+    throw new RangeError('Simulation command limit must be positive.');
+  }
+  let state = createRun(seed);
+  const counts = mutablePresentationCounts();
+  ({ state } = chooseAndCount(state, classChoice(heroClass), counts));
+  if (state.phase.kind !== 'exploration') {
+    throw new Error('Class selection did not begin exploration.');
+  }
+  const topologyId = state.phase.dungeon.topologyId;
+  const exitRoomId = state.phase.dungeon.exitRoomId;
+  const exitGuardian = state.phase.dungeon.exitGuardian.enemyId;
+  const topology = getTopology(topologyId);
+  const route = shortestRoomPath(topology, topology.entranceRoomId, exitRoomId);
+  const scrollAttemptedRooms = new Set<string>();
+  let lastStats = state.phase.stats;
+
+  while (state.revision < commandLimit) {
+    if (state.phase.kind === 'victory' || state.phase.kind === 'death') {
+      return completeRunOutcome(
+        state,
+        heroClass,
+        topologyId,
+        exitRoomId,
+        exitGuardian,
+        exitStrategy,
+        counts,
+        lastStats,
+      );
+    }
+
+    const view = deriveView(state);
+    let choiceId: ChoiceId;
+    if (state.phase.kind === 'exploration') {
+      if (
+        view.kind === 'exploration' &&
+        view.canUseItem &&
+        view.maximumHp - view.hp >= 2
+      ) {
+        choiceId = CHOICE_IDS.item;
+      } else {
+        const routeIndex = route.indexOf(state.phase.dungeon.currentRoomId);
+        const nextRoomId = route[routeIndex + 1];
+        if (routeIndex < 0 || !nextRoomId) {
+          throw new Error('Complete-run simulation left its selected route.');
+        }
+        const room = getRoom(topology, state.phase.dungeon.currentRoomId);
+        const direction = DIRECTIONS.find((candidate) => {
+          const connection = room.connections[candidate];
+          return (
+            connection?.kind === 'room' && connection.roomId === nextRoomId
+          );
+        });
+        if (!direction)
+          throw new Error('Shortest-route connection is missing.');
+        const choice = view.choices.find(({ label }) => label === direction);
+        if (!choice) throw new Error('Shortest-route choice is unavailable.');
+        choiceId = choice.id;
+      }
+    } else if (state.phase.kind === 'exit') {
+      choiceId =
+        exitStrategy === 'bypass' &&
+        view.choices.some(({ id }) => id === CHOICE_IDS.exitBypass)
+          ? CHOICE_IDS.exitBypass
+          : CHOICE_IDS.exitFight;
+    } else {
+      choiceId = chooseTacticalAction(state, view, scrollAttemptedRooms);
+    }
+    ({ state } = chooseAndCount(state, choiceId, counts));
+    if (
+      state.phase.kind === 'exploration' ||
+      state.phase.kind === 'event' ||
+      state.phase.kind === 'combat' ||
+      state.phase.kind === 'exit'
+    ) {
+      lastStats = state.phase.stats;
+    }
+  }
+
+  return completeRunOutcome(
+    state,
+    heroClass,
+    topologyId,
+    exitRoomId,
+    exitGuardian,
+    exitStrategy,
+    counts,
+    lastStats,
+    'command-limit',
+  );
+}
+
 function chooseTacticalAction(
   state: RunState,
   view: GameView,
@@ -208,7 +347,7 @@ function chooseTacticalAction(
     }
     scrollAttemptedRooms.add(state.phase.encounterRoomId);
     const preference: readonly (keyof typeof view.scrolls)[] =
-      view.enemyName === 'GHOUL'
+      view.enemyName === 'GHOUL' || view.enemyName === 'ICE DEMON'
         ? ['FIREBALL', 'STUN', 'LIGHTNING']
         : ['LIGHTNING', 'STUN', 'FIREBALL'];
     const spell = preference.find((name) => view.scrolls[name] > 0);
@@ -269,6 +408,112 @@ function choose(state: RunState, choiceId: string): RunState {
 
 function classChoice(heroClass: HeroClass): ChoiceId {
   return CHOICE_IDS[heroClass];
+}
+
+type MutablePresentationCounts = {
+  heroSplash: number;
+  enemySplash: number;
+  opposedRoll: number;
+  combatNotice: number;
+  victoryDoor: number;
+};
+
+function mutablePresentationCounts(): MutablePresentationCounts {
+  return {
+    heroSplash: 0,
+    enemySplash: 0,
+    opposedRoll: 0,
+    combatNotice: 0,
+    victoryDoor: 0,
+  };
+}
+
+function chooseAndCount(
+  state: RunState,
+  choiceId: string,
+  counts: MutablePresentationCounts,
+): Readonly<{ state: RunState }> {
+  const result = applyCommand(state, {
+    type: 'choose',
+    commandId: `complete-run-${state.revision + 1}`,
+    viewId: deriveView(state).id,
+    choiceId,
+  });
+  if (result.status === 'rejected') {
+    throw new Error(`Simulation command was rejected: ${result.reason}.`);
+  }
+  countPresentations(counts, result.presentations);
+  return Object.freeze({ state: result.state });
+}
+
+function countPresentations(
+  counts: MutablePresentationCounts,
+  presentations: readonly GamePresentation[],
+): void {
+  for (const presentation of presentations) {
+    switch (presentation.kind) {
+      case 'hero-splash':
+        counts.heroSplash += 1;
+        break;
+      case 'enemy-splash':
+        counts.enemySplash += 1;
+        break;
+      case 'opposed-roll':
+        counts.opposedRoll += 1;
+        break;
+      case 'combat-notice':
+        counts.combatNotice += 1;
+        break;
+      case 'victory-door':
+        counts.victoryDoor += 1;
+        break;
+    }
+  }
+}
+
+function completeRunOutcome(
+  state: RunState,
+  heroClass: HeroClass,
+  topologyId: string,
+  exitRoomId: string,
+  exitGuardian: Extract<EnemyId, 'fire-demon' | 'ice-demon'>,
+  exitStrategy: CompleteRunExitStrategy,
+  counts: MutablePresentationCounts,
+  lastStats: HeroStats,
+  forcedResult?: 'command-limit',
+): CompleteRunOutcome {
+  if (state.phase.kind === 'class-select') {
+    throw new Error('Complete-run outcome requires a selected class.');
+  }
+  const result =
+    forcedResult ??
+    (state.phase.kind === 'victory'
+      ? 'victory'
+      : state.phase.kind === 'death'
+        ? 'death'
+        : 'command-limit');
+  const roomsFound =
+    state.phase.kind === 'victory' || state.phase.kind === 'death'
+      ? state.phase.roomsFound
+      : state.phase.dungeon.visitedRoomIds.length;
+  return Object.freeze({
+    policyVersion: COMPLETE_RUN_POLICY_VERSION,
+    seed: state.seed,
+    heroClass,
+    topologyId,
+    exitRoomId,
+    exitGuardian,
+    exitStrategy,
+    result,
+    commands: state.revision,
+    roomsFound,
+    enemiesSlain: state.phase.enemiesSlain,
+    level: lastStats.level,
+    hp: result === 'death' ? 0 : lastStats.hp,
+    maximumHp: lastStats.maximumHp,
+    deathCause: state.phase.kind === 'death' ? state.phase.cause : null,
+    presentations: Object.freeze({ ...counts }),
+  });
 }
 
 function liveOutcome(

@@ -578,7 +578,7 @@ Branch: `codex/complete-run-content`
 
 Gate: E
 
-Status: **Active**. The approved hybrid Demon exit—deterministic Fire/Ice selection independent of class, direct combat, one class-specific keep-high bypass against provisional Danger 5, retreat, persistent failed-bypass combat, and terminal victory—passed owner Board Lab review on 2026-09-29. The owner confirmed Demon persistence after retreat/re-entry and completed a Rogue `SLIP` victory. Failed-bypass combat and guardian HP persistence after Run remain automated-test verified. The owner-approved enemy introductions, front-facing Warrior/Rogue/Wizard introductions, and gold victory arch are merged in their live sequences. Lost Soul is implemented as a persistent cross-run memory with an off-route, noncombat `REMEMBER / LEAVE` encounter. Its presentation passed owner Board Lab review on 2026-10-03; truthful-clue behavior, the no-material-power boundary, and replacement-on-next-death behavior are automated-test verified.
+Status: **Complete pending merge**. The approved hybrid Demon exit—deterministic Fire/Ice selection independent of class, direct combat, one class-specific keep-high bypass against provisional Danger 5, retreat, persistent failed-bypass combat, and terminal victory—passed owner Board Lab review on 2026-09-29. The owner-approved enemy introductions, front-facing Warrior/Rogue/Wizard introductions, gold victory arch, and Lost Soul presentation are merged. Complete-run golden seeds cover a victory and a late final-guardian death for every class, including both Demon types and the complete hero/enemy/victory art sequence. A 200-seed bypass-policy sweep per class completed with no command-limit stalls and averaged 8.9–9.8 rooms per run. The detailed closure evidence is recorded in `docs/reviews/slice-8-golden-runs.md`; preserve the class outcome spread as balance evidence rather than silently retuning it.
 
 Build:
 
@@ -668,8 +668,8 @@ First produce written findings and ADRs. Only then implement the confirmed insta
 
 ## 14. Near-term action list
 
-1. Merge the approved Lost Soul flow without cross-run gear recovery.
-2. Complete representative full-run golden-seed review for Slice 8.
+1. Merge the completed Slice 8 golden-run closure review.
+2. Begin Slice 9 private-alpha hardening with save/resume and interrupted-board recovery.
 
 The order remains physical-first: close the full controller-to-board loop, agree
 on the room-scale exploration language, then build maps against that reviewed
