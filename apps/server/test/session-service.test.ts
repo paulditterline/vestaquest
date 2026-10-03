@@ -1,9 +1,17 @@
 import {
   CommandSessionRequestSchema,
   type CommandSessionRequest,
+  type IdempotencyKey,
   type SessionId,
 } from '@vestaquest/contracts';
-import { CHOICE_IDS, deriveView } from '@vestaquest/game';
+import {
+  CHOICE_IDS,
+  applyCommand,
+  createRng,
+  createRun,
+  deriveView,
+  type RunState,
+} from '@vestaquest/game';
 import { describe, expect, it } from 'vitest';
 import {
   InMemorySessionRepository,
@@ -53,6 +61,56 @@ async function createReadySession(seed = 10) {
   return { ...harness, sessionId: created.sessionId };
 }
 
+function fatalPrisonerState(): RunState {
+  for (let runSeed = 1; runSeed <= 1_000; runSeed += 1) {
+    const initial = createRun(runSeed);
+    const selected = applyCommand(initial, {
+      type: 'choose',
+      commandId: `class-${runSeed}`,
+      viewId: deriveView(initial).id,
+      choiceId: CHOICE_IDS.warrior,
+    });
+    if (
+      selected.status !== 'accepted' ||
+      selected.state.phase.kind !== 'exploration'
+    ) {
+      continue;
+    }
+    const event = selected.state.phase.dungeon.events.find(
+      ({ eventId }) => eventId === 'chained-victim',
+    );
+    if (!event) continue;
+    for (let rngSeed = 1; rngSeed <= 1_000; rngSeed += 1) {
+      const candidate = Object.freeze({
+        ...selected.state,
+        rng: createRng(rngSeed),
+        phase: Object.freeze({
+          ...selected.state.phase,
+          kind: 'event' as const,
+          stats: Object.freeze({ ...selected.state.phase.stats, hp: 1 }),
+          dungeon: Object.freeze({
+            ...selected.state.phase.dungeon,
+            currentRoomId: event.roomId,
+          }),
+          eventId: event.eventId,
+          retreatRoomId: selected.state.phase.dungeon.currentRoomId,
+          screen: Object.freeze({ kind: 'node' as const, nodeId: 'prisoner' }),
+        }),
+      });
+      const result = applyCommand(candidate, {
+        type: 'choose',
+        commandId: `fatal-${rngSeed}`,
+        viewId: deriveView(candidate).id,
+        choiceId: 'event.chained-victim.free',
+      });
+      if (result.status === 'accepted' && result.state.phase.kind === 'death') {
+        return candidate;
+      }
+    }
+  }
+  throw new Error('Unable to build a fatal prisoner fixture.');
+}
+
 describe('SessionService creation and presentation state', () => {
   it('creates a locked session with ordered title and class-select intents', async () => {
     const { repository, service } = createHarness(0x1234abcd);
@@ -94,6 +152,77 @@ describe('SessionService creation and presentation state', () => {
     expect(
       (await repository.listPresentationIntents(created.sessionId))[0],
     ).toMatchObject({ status: 'delivered' });
+  });
+
+  it('carries the most recent failed hero into the next run', async () => {
+    const { repository, service } = createHarness(10);
+    const failedRun = await service.createSession();
+    const key = 'record-failed-hero' as IdempotencyKey;
+    await repository.executeCommand(
+      failedRun.sessionId,
+      key,
+      'lost-soul-memory',
+      (current) => ({
+        receipt: {
+          id: 'memory-receipt',
+          sessionId: current.sessionId,
+          idempotencyKey: key,
+          requestFingerprint: 'lost-soul-memory',
+          originalOutcome: 'accepted',
+          resultingViewVersion: current.state.revision,
+          acceptedAtMs: 1_001,
+        },
+        transition: {
+          session: current,
+          presentationIntents: [],
+          lostSoulMemory: { heroClass: 'wizard', cause: 'THE CHAINS' },
+        },
+      }),
+    );
+
+    const nextRun = await service.createSession();
+    expect(
+      (await repository.get(nextRun.sessionId))?.state.lostSoulMemory,
+    ).toEqual({ heroClass: 'wizard', cause: 'THE CHAINS' });
+    await service.acknowledgeDisplayed(nextRun.sessionId, 0);
+    await service.submitCommand(command(nextRun.sessionId, 'class', 0, 2));
+    const started = await repository.get(nextRun.sessionId);
+    expect(started?.state.phase).toMatchObject({ kind: 'exploration' });
+    if (started?.state.phase.kind !== 'exploration') {
+      throw new Error('Expected the remembered run to begin exploration.');
+    }
+    expect(
+      started.state.phase.dungeon.events.filter(
+        ({ eventId }) => eventId === 'lost-soul',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('records a terminal death as the next run memory in the same command', async () => {
+    const { repository, service } = createHarness();
+    const sessionId = 'fatal-session' as SessionId;
+    const state = fatalPrisonerState();
+    await repository.create(
+      {
+        sessionId,
+        state,
+        displayStatus: 'ready',
+        nextPresentationSequence: 0,
+        createdAtMs: 1,
+        updatedAtMs: 1,
+      },
+      [],
+    );
+    const result = await service.submitCommand(
+      command(sessionId, 'fatal-chains', state.revision, 1),
+    );
+    expect(result.kind).toBe('response');
+    if (result.kind !== 'response') return;
+    expect(result.response.view.kind).toBe('death');
+    expect(await repository.getLostSoulMemory()).toEqual({
+      heroClass: 'warrior',
+      cause: 'THE CHAINS',
+    });
   });
 
   it('queues hero art before the first exploration view', async () => {

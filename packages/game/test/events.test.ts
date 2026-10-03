@@ -7,6 +7,7 @@ import {
   HERO_STARTING_STATS,
   INITIAL_EVENT_COUNT,
   LIBRARY_EVENT,
+  LOST_SOUL_EVENT,
   placeCoreEncounters,
   placeInitialEvents,
   resolveLibraryReward,
@@ -704,6 +705,73 @@ describe('authored dungeon events', () => {
         'strange-hole',
       ]),
     );
+  });
+
+  it('replaces one off-route event with the remembered Lost Soul', () => {
+    const memory = { heroClass: 'wizard', cause: 'THE CHAINS' } as const;
+    for (const topology of AUTHORED_TOPOLOGIES) {
+      for (const exitRoomId of topology.exitCandidateRoomIds) {
+        const occupied = placeCoreEncounters(
+          topology,
+          exitRoomId,
+          createRng(1),
+        ).encounters.map(({ roomId }) => roomId);
+        const directRoute = new Set(
+          shortestRoomPath(topology, topology.entranceRoomId, exitRoomId),
+        );
+        const placements = placeInitialEvents(
+          topology,
+          exitRoomId,
+          occupied,
+          memory,
+        );
+        const lostSouls = placements.filter(
+          ({ eventId }) => eventId === 'lost-soul',
+        );
+        expect(placements).toHaveLength(INITIAL_EVENT_COUNT);
+        expect(lostSouls).toHaveLength(1);
+        expect(directRoute.has(lostSouls[0]!.roomId)).toBe(false);
+        expect(new Set(placements.map(({ roomId }) => roomId)).size).toBe(
+          INITIAL_EVENT_COUNT,
+        );
+      }
+    }
+  });
+
+  it('authors the approved optional Lost Soul memory encounter', () => {
+    expect(() => validateEventDefinition(LOST_SOUL_EVENT)).not.toThrow();
+    expect(LOST_SOUL_EVENT).toMatchObject({
+      id: 'lost-soul',
+      heading: 'LOST SOUL',
+      startNodeId: 'echo',
+      nodes: [
+        {
+          choices: [
+            {
+              id: 'remember',
+              label: 'REMEMBER',
+              resolvesEvent: true,
+              resolution: {
+                kind: 'immediate',
+                destination: {
+                  kind: 'clue',
+                  clueId: 'exit-first-step',
+                  reliability: 'truthful',
+                },
+              },
+            },
+            {
+              id: 'leave',
+              label: 'LEAVE',
+              resolution: {
+                kind: 'immediate',
+                destination: { kind: 'return-to-map' },
+              },
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it('authors the approved one-search Ancient Library', () => {

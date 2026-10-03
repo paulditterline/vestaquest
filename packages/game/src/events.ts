@@ -9,6 +9,7 @@ import {
   type EquipmentItemId,
   type EquipmentItemName,
   type HeroClass,
+  type LostSoulMemory,
   type OpposedRollPresentation,
   type RollStat,
   type ScrollId,
@@ -20,6 +21,7 @@ export const EVENT_IDS = [
   'trap-room',
   'chained-victim',
   'strange-hole',
+  'lost-soul',
   'call-for-help',
   'fresh-bread',
   'loved-one',
@@ -705,12 +707,48 @@ export const STRANGE_HOLE_EVENT: EventDefinition = Object.freeze({
   ]),
 });
 
+export const LOST_SOUL_EVENT: EventDefinition = Object.freeze({
+  id: 'lost-soul',
+  heading: 'LOST SOUL',
+  startNodeId: 'echo',
+  nodes: Object.freeze([
+    Object.freeze({
+      id: 'echo',
+      copy: Object.freeze(['A DEAD HERO WAITS']),
+      choices: Object.freeze([
+        Object.freeze({
+          id: 'remember',
+          label: 'REMEMBER',
+          resolvesEvent: true,
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({
+              kind: 'clue',
+              clueId: 'exit-first-step',
+              reliability: 'truthful',
+            }),
+          }),
+        }),
+        Object.freeze({
+          id: 'leave',
+          label: 'LEAVE',
+          resolution: Object.freeze({
+            kind: 'immediate',
+            destination: Object.freeze({ kind: 'return-to-map' }),
+          }),
+        }),
+      ]),
+    }),
+  ]),
+});
+
 export const AUTHORED_EVENTS: readonly EventDefinition[] = Object.freeze([
   CHAINED_PRISONER_EVENT,
   LIBRARY_EVENT,
   SOLID_DOOR_EVENT,
   STRANGE_HOLE_EVENT,
   TRAP_ROOM_EVENT,
+  LOST_SOUL_EVENT,
 ]);
 
 export const INITIAL_EVENT_COUNT = 3 as const;
@@ -740,6 +778,7 @@ export function placeInitialEvents(
   topology: DungeonTopology,
   exitRoomId: RoomId,
   occupiedRoomIds: readonly RoomId[],
+  lostSoulMemory: LostSoulMemory | null = null,
 ): readonly PlacedEvent[] {
   const unavailable = new Set<RoomId>([
     topology.entranceRoomId,
@@ -787,9 +826,19 @@ export function placeInitialEvents(
   }
   if (!bestRoomIds) throw new Error('Initial event placement failed.');
   const eventIds = selectInitialEventIds(topology.id, exitRoomId);
+  const lostSoulIndex =
+    lostSoulMemory === null
+      ? -1
+      : bestRoomIds.findIndex((roomId) => !directRoute.has(roomId));
+  if (lostSoulMemory !== null && lostSoulIndex < 0) {
+    throw new Error('Lost Soul placement requires an off-route event room.');
+  }
   return Object.freeze(
     eventIds.map((eventId, index) =>
-      Object.freeze({ roomId: bestRoomIds[index]!, eventId }),
+      Object.freeze({
+        roomId: bestRoomIds[index]!,
+        eventId: index === lostSoulIndex ? 'lost-soul' : eventId,
+      }),
     ),
   );
 }

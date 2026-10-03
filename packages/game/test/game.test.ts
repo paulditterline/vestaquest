@@ -15,6 +15,7 @@ import {
   type EventId,
   type ExitGuardianId,
   type GameCommand,
+  type LostSoulMemory,
   type RunState,
   type ScrollId,
 } from '../src/index.js';
@@ -43,8 +44,9 @@ function accept(
 function beginExploration(
   seed = 10,
   classChoice: string = CHOICE_IDS.warrior,
+  lostSoulMemory: LostSoulMemory | null = null,
 ): RunState {
-  return accept(createRun(seed), 'choose-class', classChoice);
+  return accept(createRun(seed, lostSoulMemory), 'choose-class', classChoice);
 }
 
 function beginExplorationWithEvent(
@@ -235,6 +237,35 @@ function chainedPrisonerState(
       eventId: event.eventId,
       retreatRoomId: state.phase.dungeon.currentRoomId,
       screen: Object.freeze({ kind: 'node' as const, nodeId: 'prisoner' }),
+    }),
+  });
+}
+
+function lostSoulState(): RunState {
+  const memory = {
+    heroClass: 'wizard',
+    cause: 'THE CHAINS',
+  } as const satisfies LostSoulMemory;
+  const state = beginExploration(10, CHOICE_IDS.rogue, memory);
+  if (state.phase.kind !== 'exploration') {
+    throw new Error('Expected exploration fixture.');
+  }
+  const event = state.phase.dungeon.events.find(
+    ({ eventId }) => eventId === 'lost-soul',
+  );
+  if (!event) throw new Error('Expected the staged Lost Soul.');
+  return Object.freeze({
+    ...state,
+    phase: Object.freeze({
+      ...state.phase,
+      kind: 'event' as const,
+      dungeon: Object.freeze({
+        ...state.phase.dungeon,
+        currentRoomId: event.roomId,
+      }),
+      eventId: event.eventId,
+      retreatRoomId: state.phase.dungeon.currentRoomId,
+      screen: Object.freeze({ kind: 'node' as const, nodeId: 'echo' }),
     }),
   });
 }
@@ -1617,6 +1648,114 @@ describe('live Ancient Library event flow', () => {
       kind: 'combat',
       enemyId: 'skeleton-knight',
     });
+  });
+});
+
+describe('live Lost Soul event flow', () => {
+  it('names the previous hero and cause while Leave preserves the echo', () => {
+    const state = lostSoulState();
+    expect(deriveView(state)).toMatchObject({
+      kind: 'event',
+      heading: 'LOST SOUL',
+      copy: ['A WIZARD FELL', 'BY THE CHAINS'],
+      choices: [
+        { id: 'event.lost-soul.remember', number: 1, label: 'REMEMBER' },
+        { id: 'event.lost-soul.leave', number: 2, label: 'LEAVE' },
+      ],
+    });
+
+    const left = choose(state, 'leave-lost-soul', 'event.lost-soul.leave');
+    expect(left.status).toBe('accepted');
+    if (left.status !== 'accepted' || left.state.phase.kind !== 'exploration') {
+      throw new Error('Expected exploration after leaving.');
+    }
+    expect(
+      left.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'lost-soul',
+      )?.status,
+    ).toBe('active');
+    expect(left.state.rng.draws).toBe(state.rng.draws);
+  });
+
+  it('resolves into a truthful shortest-path clue without material reward', () => {
+    const state = lostSoulState();
+    const remembered = choose(
+      state,
+      'remember-lost-soul',
+      'event.lost-soul.remember',
+    );
+    expect(remembered.status).toBe('accepted');
+    if (
+      remembered.status !== 'accepted' ||
+      remembered.state.phase.kind !== 'event'
+    ) {
+      throw new Error('Expected a remembered Lost Soul clue.');
+    }
+    expect(remembered.state.phase.screen).toMatchObject({
+      kind: 'reward',
+      heading: 'THE LOST SOUL WHISPERS',
+      copy: [expect.stringMatching(/^GO (NORTH|EAST|SOUTH|WEST) FROM HERE$/)],
+    });
+    if (remembered.state.phase.screen.kind !== 'reward') {
+      throw new Error('Expected the transient clue.');
+    }
+    expect(remembered.state.phase.stats).toEqual(
+      state.phase.kind === 'event' ? state.phase.stats : undefined,
+    );
+    expect(remembered.state.phase.equipment).toEqual(
+      state.phase.kind === 'event' ? state.phase.equipment : undefined,
+    );
+    expect(remembered.state.phase.consumable).toBe(
+      state.phase.kind === 'event' ? state.phase.consumable : undefined,
+    );
+    expect(remembered.state.rng.draws).toBe(state.rng.draws);
+
+    const clueDirection = remembered.state.phase.screen.copy[0]!.split(
+      ' ',
+    )[1]!.at(0) as 'N' | 'E' | 'S' | 'W';
+    const topology = getTopology(remembered.state.phase.dungeon.topologyId);
+    const currentRoomId = remembered.state.phase.dungeon.currentRoomId;
+    const connection = getRoom(topology, currentRoomId).connections[
+      clueDirection
+    ];
+    expect(connection?.kind).toBe('room');
+    if (connection?.kind !== 'room') throw new Error('Expected a real path.');
+    expect(
+      shortestRoomDistance(
+        topology,
+        connection.roomId,
+        remembered.state.phase.dungeon.exitRoomId,
+      ),
+    ).toBe(
+      shortestRoomDistance(
+        topology,
+        currentRoomId,
+        remembered.state.phase.dungeon.exitRoomId,
+      ) - 1,
+    );
+    expect(
+      remembered.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'lost-soul',
+      )?.status,
+    ).toBe('resolved');
+
+    const continued = choose(
+      remembered.state,
+      'continue-lost-soul',
+      'event.lost-soul.continue',
+    );
+    expect(continued.status).toBe('accepted');
+    if (
+      continued.status !== 'accepted' ||
+      continued.state.phase.kind !== 'exploration'
+    ) {
+      throw new Error('Expected exploration after the clue.');
+    }
+    expect(
+      continued.state.phase.dungeon.events.find(
+        ({ eventId }) => eventId === 'lost-soul',
+      )?.status,
+    ).toBe('resolved');
   });
 });
 
