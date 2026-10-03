@@ -69,6 +69,25 @@ export class PresentationCoordinator {
     return dispatch;
   }
 
+  public async retry(
+    sessionId: SessionId,
+  ): Promise<PresentationDispatchResult> {
+    const session = await this.#repository.get(sessionId);
+    if (!session) throw new SessionNotFoundError(sessionId);
+    const pending = (
+      await this.#repository.listPresentationIntents(sessionId)
+    ).filter((intent) => intent.status === 'pending');
+    const blockedFrameId = this.#queue.blockedFrameId;
+    if (
+      blockedFrameId !== undefined &&
+      !pending.some(({ id }) => id === blockedFrameId)
+    ) {
+      return Object.freeze({ status: 'blocked', deliveredIntentIds: [] });
+    }
+    if (blockedFrameId !== undefined) this.#queue.retryBlocked();
+    return this.dispatch(sessionId);
+  }
+
   async #drain(sessionId: SessionId): Promise<PresentationDispatchResult> {
     const session = await this.#repository.get(sessionId);
     if (!session) throw new SessionNotFoundError(sessionId);

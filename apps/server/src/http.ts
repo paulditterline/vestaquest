@@ -3,6 +3,7 @@ import {
   CreateSessionRequestSchema,
   GetSessionRequestSchema,
   PROTOCOL_VERSION,
+  RetryDisplayRequestSchema,
   SessionIdSchema,
   type ControllerView,
   type SessionId,
@@ -17,6 +18,7 @@ export type HttpServerDependencies = Readonly<{
   sessionService: SessionService;
   presentationDispatcher?: Readonly<{
     dispatch: (sessionId: SessionId) => Promise<unknown>;
+    retry: (sessionId: SessionId) => Promise<unknown>;
   }>;
   onBackgroundDispatchError?: (error: unknown) => void;
 }>;
@@ -26,6 +28,7 @@ type ErrorCode =
   | 'session-id-mismatch'
   | 'session-not-found'
   | 'idempotency-conflict'
+  | 'display-recovery-unavailable'
   | 'internal-error';
 
 type ErrorResponse = Readonly<{
@@ -57,6 +60,9 @@ export function buildHttpServer(
       const response = await dependencies.sessionService.getSession(
         parsed.data.sessionId,
       );
+      if (response.view.display.status === 'locked') {
+        startPresentationDispatch(dependencies, parsed.data.sessionId);
+      }
       return reply.code(200).send(response);
     } catch (error) {
       return handleServiceError(error, reply);
@@ -107,6 +113,46 @@ export function buildHttpServer(
       return handleServiceError(error, reply);
     }
   });
+
+  server.post(
+    '/api/sessions/:sessionId/display/retry',
+    async (request, reply) => {
+      const parsedPath = SessionIdSchema.safeParse(
+        valueFromRecord(request.params, 'sessionId'),
+      );
+      const parsedBody = RetryDisplayRequestSchema.safeParse(request.body);
+      if (!parsedPath.success || !parsedBody.success) {
+        return validationError(reply);
+      }
+      if (parsedPath.data !== parsedBody.data.sessionId) {
+        return sendError(
+          reply,
+          400,
+          'session-id-mismatch',
+          'The path and recovery session IDs must match.',
+        );
+      }
+
+      try {
+        const dispatcher = dependencies.presentationDispatcher;
+        if (!dispatcher) {
+          return sendError(
+            reply,
+            503,
+            'display-recovery-unavailable',
+            'Display recovery is unavailable.',
+          );
+        }
+        await dispatcher.retry(parsedBody.data.sessionId);
+        const response = await dependencies.sessionService.getSession(
+          parsedBody.data.sessionId,
+        );
+        return reply.code(200).send(response);
+      } catch (error) {
+        return handleServiceError(error, reply);
+      }
+    },
+  );
 
   server.setErrorHandler((_error, _request, reply) =>
     sendError(
@@ -196,7 +242,7 @@ function handleServiceError(error: unknown, reply: FastifyReply) {
 
 function sendError(
   reply: FastifyReply,
-  status: 400 | 404 | 409 | 500,
+  status: 400 | 404 | 409 | 500 | 503,
   code: ErrorCode,
   message: string,
   view?: ControllerView,

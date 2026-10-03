@@ -86,6 +86,34 @@ describe('FetchControllerApi', () => {
     );
   });
 
+  it('requests an explicit retry for an interrupted board', async () => {
+    const harness = fetchHarness(200, sessionResponse);
+    const api = new FetchControllerApi({ fetch: harness.fetch });
+
+    await expect(
+      api.retryDisplay({
+        protocolVersion: PROTOCOL_VERSION,
+        sessionId: sessionResponse.sessionId,
+      }),
+    ).resolves.toEqual(sessionResponse);
+    expect(harness.calls[0]).toEqual({
+      input: '/api/sessions/session%2Fwith%20path/display/retry',
+      init: {
+        method: 'POST',
+        body: JSON.stringify({
+          protocolVersion: PROTOCOL_VERSION,
+          sessionId: sessionResponse.sessionId,
+        }),
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      },
+    });
+  });
+
   it('rejects invalid JSON and HTTP errors without exposing response bodies', async () => {
     const invalidJson = new FetchControllerApi({
       fetch: () =>

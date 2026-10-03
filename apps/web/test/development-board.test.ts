@@ -153,6 +153,7 @@ describe('PlayLabView', () => {
         onChoose: () => undefined,
         onNewSession: () => undefined,
         onReconnect: () => undefined,
+        onRetryDisplay: () => undefined,
         shell: 'black',
       }),
     );

@@ -216,6 +216,35 @@ describe('PresentationCoordinator', () => {
     queue.discardBlocked();
   });
 
+  it('retries the blocked durable intent and resumes its ordered sequence', async () => {
+    let fail = true;
+    const failure = new TransportError({
+      operation: 'send',
+      kind: 'server',
+      retryable: false,
+      deliveryCertainty: 'not-sent',
+    });
+    const { coordinator, service, transport } = createHarness(() => {
+      if (!fail) return;
+      fail = false;
+      throw failure;
+    });
+    const created = await service.createSession();
+
+    expect(await coordinator.dispatch(created.sessionId)).toMatchObject({
+      status: 'blocked',
+    });
+    const recovered = await coordinator.retry(created.sessionId);
+
+    expect(recovered.status).toBe('displayed');
+    expect(recovered.deliveredIntentIds).toHaveLength(2);
+    expect(transport.attempts).toHaveLength(3);
+    expect((await service.getSession(created.sessionId)).view.display).toEqual({
+      status: 'ready',
+      legalChoices: [1, 2, 3],
+    });
+  });
+
   it('coalesces concurrent dispatch and does not duplicate physical output', async () => {
     let releaseFirst!: () => void;
     const firstSend = new Promise<void>((resolve) => {

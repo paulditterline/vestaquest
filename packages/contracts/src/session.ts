@@ -35,6 +35,10 @@ export const GetSessionResponseSchema = z
   })
   .strict();
 
+export const RetryDisplayRequestSchema = z.object(sessionEnvelope).strict();
+
+export const RetryDisplayResponseSchema = GetSessionResponseSchema;
+
 export const ChooseCommandSchema = z
   .object({
     type: z.literal('choose'),
@@ -71,6 +75,8 @@ export type CreateSessionRequest = z.infer<typeof CreateSessionRequestSchema>;
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponseSchema>;
 export type GetSessionRequest = z.infer<typeof GetSessionRequestSchema>;
 export type GetSessionResponse = z.infer<typeof GetSessionResponseSchema>;
+export type RetryDisplayRequest = z.infer<typeof RetryDisplayRequestSchema>;
+export type RetryDisplayResponse = z.infer<typeof RetryDisplayResponseSchema>;
 export type ChooseCommand = z.infer<typeof ChooseCommandSchema>;
 export type CommandSessionRequest = z.infer<typeof CommandSessionRequestSchema>;
 export type CommandOutcome = z.infer<typeof CommandOutcomeSchema>;
